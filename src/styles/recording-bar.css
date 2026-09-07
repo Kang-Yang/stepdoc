@@ -1,0 +1,213 @@
+html.recording-bar-mode,
+html.recording-bar-mode body,
+html.recording-bar-mode #root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #121620;
+}
+
+html.recording-bar-mode body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.recording-bar-shell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.recording-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 0 8px 0 12px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(28, 35, 51, 0.97) 0%, rgba(18, 22, 32, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: #f8fafc;
+}
+
+.recording-bar.is-paused {
+  background: linear-gradient(180deg, rgba(41, 37, 36, 0.97) 0%, rgba(24, 22, 20, 0.98) 100%);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.recording-bar__drag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  cursor: grab;
+}
+
+.recording-bar__drag:active {
+  cursor: grabbing;
+}
+
+.recording-bar__indicator {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.recording-bar.is-paused .recording-bar__indicator {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.recording-bar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.65);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.recording-bar__dot.is-paused {
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.55);
+  animation: none;
+}
+
+.recording-bar__info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.recording-bar__time {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  line-height: 1;
+}
+
+.recording-bar__meta {
+  font-size: 11px;
+  color: rgba(248, 250, 252, 0.62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recording-bar__meta strong {
+  color: #5eead4;
+  font-weight: 600;
+}
+
+.recording-bar.is-paused .recording-bar__meta strong {
+  color: #fbbf24;
+}
+
+.recording-bar__divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.recording-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.recording-bar__btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  border-radius: 10px;
+  padding: 0 10px;
+  min-width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.recording-bar__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.recording-bar__btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.recording-bar__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.recording-bar__btn--pause.is-active {
+  background: rgba(15, 118, 110, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.25);
+}
+
+.recording-bar__btn--stop {
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+  padding: 0 12px;
+}
+
+.recording-bar__btn--stop:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f87171 0%, #ef4444 100%);
+}
+
+.recording-bar__error {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 1px;
+  font-size: 9px;
+  color: #fecaca;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.88);
+    opacity: 0.75;
+  }
+}

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 80" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0a4f4a"/>
+      <stop offset="0.5" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#115e59"/>
+    </linearGradient>
+    <linearGradient id="doc" x1="196" y1="20" x2="280" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="4" width="72" height="72" rx="16" fill="url(#bg)"/>
+  <rect x="0" y="4" width="72" height="38" rx="16" fill="#ffffff" opacity="0.1"/>
+  <rect x="18" y="18" width="34" height="8" rx="4" fill="#ffffff" opacity="0.16" transform="rotate(-6 35 22)"/>
+  <rect x="20" y="24" width="34" height="8" rx="4" fill="#ffffff" opacity="0.28" transform="rotate(-2 37 28)"/>
+  <rect x="22" y="30" width="34" height="34" rx="6" fill="#ffffff"/>
+  <circle cx="30" cy="40" r="2.5" fill="#0f766e"/>
+  <rect x="36" y="38" width="16" height="3" rx="1.5" fill="#e2e8f0"/>
+  <circle cx="30" cy="48" r="2.5" fill="#0f766e" opacity="0.72"/>
+  <rect x="36" y="46" width="14" height="3" rx="1.5" fill="#e2e8f0"/>
+  <circle cx="30" cy="56" r="2.5" fill="#0f766e" opacity="0.44"/>
+  <rect x="36" y="54" width="12" height="3" rx="1.5" fill="#e2e8f0"/>
+  <circle cx="50" cy="24" r="2" fill="#ef4444"/>
+
+  <text x="92" y="50" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="34" font-weight="500" letter-spacing="-1.2">
+    <tspan fill="#1c2333">Step</tspan><tspan fill="url(#doc)" font-weight="600">Doc</tspan>
+  </text>
+  <rect x="92" y="58" width="156" height="2" rx="1" fill="#0f766e" opacity="0.14"/>
+</svg>

@@ -1,0 +1,53 @@
+[package]
+name = "stepdoc"
+version = "0.1.0"
+description = "StepDoc desktop recorder for step-by-step manuals"
+authors = ["StepDoc"]
+edition = "2021"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "s"
+panic = "abort"
+
+[lib]
+name = "stepdoc_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif"] }
+# Direct deps of the GIF exporter: gif is pinned to the same 0.13 image uses; color_quant powers
+# the shared NeuQuant global palette. Both are already in the lockfile via image.
+gif = "0.13"
+color_quant = "1.1"
+rdev = "0.5"
+screenshots = "0.8"
+uuid = { version = "1", features = ["v4"] }
+rapidocr-core = "0.2"
+docx-rs = "0.4"
+tauri-plugin-global-shortcut = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage_Streams",
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_WindowsAndMessaging",
+] }
