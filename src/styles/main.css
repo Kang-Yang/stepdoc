@@ -1041,6 +1041,20 @@ button:disabled {
   color: var(--text-muted);
 }
 
+.settings-hotkey__value.is-conflicted {
+  border-color: var(--danger-border);
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.settings-hotkey__tag {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--danger);
+}
+
 .settings-hotkey__capture {
   border: 1px solid var(--brand);
   background: var(--brand-subtle);

@@ -44,6 +44,8 @@ export default function MainApp() {
     loadRecordingOptions(),
   );
   const [hotkey, setHotkey] = useState<string | null>(() => loadHotkey());
+  /** 快捷键注册失败（通常是被其他程序占用）时保存的错误，用于在界面中可见地提示。 */
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
 
   const screenshotCount = steps.filter((step) => step.imageBase64).length;
   const canExportMedia = screenshotCount > 0;
@@ -142,23 +144,36 @@ export default function MainApp() {
 
   const commitHotkey = useCallback(
     async (value: string) => {
-      await setRecordingHotkey(value);
+      try {
+        await setRecordingHotkey(value);
+      } catch (cause) {
+        setHotkeyError(String(cause));
+        throw cause;
+      }
       updateHotkey(value);
+      setHotkeyError(null);
     },
     [updateHotkey],
   );
 
   const clearHotkey = useCallback(async () => {
-    await setRecordingHotkey(null);
+    try {
+      await setRecordingHotkey(null);
+    } catch (cause) {
+      setHotkeyError(String(cause));
+      throw cause;
+    }
     updateHotkey(null);
+    setHotkeyError(null);
   }, [updateHotkey]);
 
-  // 启动时恢复上次保存的快捷键；被其他程序占用时只记录日志，不阻塞主流程。
-  // 后续变更由设置面板在注册成功后才写入状态，因此这里只在挂载时执行一次。
+  // 启动时恢复上次保存的快捷键。若被其他程序占用而注册失败，把错误提交给界面展示，
+  // 用户能在主界面横幅和设置面板中看到并更换组合键；不阻塞主流程。
   const initialHotkeyRef = useRef(hotkey);
   useEffect(() => {
     void setRecordingHotkey(initialHotkeyRef.current).catch((cause) => {
       console.error("注册全局快捷键失败", cause);
+      setHotkeyError(String(cause));
     });
   }, []);
 
@@ -187,6 +202,9 @@ export default function MainApp() {
         <TopBar recording={recording} recordingPaused={recordingPaused} elapsedMs={elapsedMs} />
 
         {error ? <ErrorBanner message={error} /> : null}
+        {hotkeyError ? (
+          <ErrorBanner message={`${hotkeyError}\n可在「设置 → 快捷键」中更换组合键。`} />
+        ) : null}
 
         <section className="workspace">
           <ControlPanel
@@ -199,6 +217,7 @@ export default function MainApp() {
             screenshotCount={screenshotCount}
             recordingOptions={recordingOptions}
             hotkey={hotkey}
+            hotkeyError={hotkeyError}
             onStart={handleStart}
             onStop={handleStop}
             onExportWord={handleExportWord}

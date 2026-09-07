@@ -9,6 +9,7 @@ type SettingsPanelProps = {
   recording: boolean;
   recordingOptions: RecordingOptions;
   hotkey: string | null;
+  hotkeyError: string | null;
   onClose: () => void;
   onRecordingOptionsChange: (options: RecordingOptions) => void;
   onHotkeyCommit: (hotkey: string) => Promise<void>;
@@ -20,6 +21,7 @@ export function SettingsPanel({
   recording,
   recordingOptions,
   hotkey,
+  hotkeyError,
   onClose,
   onRecordingOptionsChange,
   onHotkeyCommit,
@@ -48,7 +50,12 @@ export function SettingsPanel({
         <div className="settings-panel__body">
           <section className="settings-section">
             <h3 className="settings-section__title">快捷键</h3>
-            <HotkeyField hotkey={hotkey} onCommit={onHotkeyCommit} onClear={onHotkeyClear} />
+            <HotkeyField
+              hotkey={hotkey}
+              registrationError={hotkeyError}
+              onCommit={onHotkeyCommit}
+              onClear={onHotkeyClear}
+            />
           </section>
 
           <section className="settings-section">

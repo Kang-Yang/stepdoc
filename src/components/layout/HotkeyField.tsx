@@ -19,12 +19,23 @@ type HotkeyFieldProps = {
   onCommit: (hotkey: string) => Promise<void>;
   /** 注销并清除快捷键。 */
   onClear: () => Promise<void>;
+  /** 当前快捷键的持久化注册失败信息（如启动时被其他程序占用），用于标记未生效状态。 */
+  registrationError?: string | null;
 };
 
-export function HotkeyField({ hotkey, onCommit, onClear }: HotkeyFieldProps) {
+export function HotkeyField({
+  hotkey,
+  onCommit,
+  onClear,
+  registrationError,
+}: HotkeyFieldProps) {
   const [capturing, setCapturing] = useState(false);
   const [partialModifiers, setPartialModifiers] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // 捕获新组合键期间只展示本次操作的结果；平时展示持久化的注册失败原因。
+  const shownError = capturing ? error : registrationError;
+  const conflicted = !capturing && Boolean(registrationError);
 
   useEffect(() => {
     if (!capturing) return;
@@ -97,8 +108,9 @@ export function HotkeyField({ hotkey, onCommit, onClear }: HotkeyFieldProps) {
               : "请按下新的快捷键，Esc 取消"}
           </span>
         ) : (
-          <span className={`settings-hotkey__value ${hotkey ? "" : "is-empty"}`}>
+          <span className={`settings-hotkey__value ${hotkey ? "" : "is-empty"} ${conflicted ? "is-conflicted" : ""}`}>
             {hotkey ? formatHotkey(hotkey) : "未设置"}
+            {conflicted ? <small className="settings-hotkey__tag">未生效</small> : null}
           </span>
         )}
       </div>
@@ -125,7 +137,7 @@ export function HotkeyField({ hotkey, onCommit, onClear }: HotkeyFieldProps) {
           )}
         </div>
       </div>
-      {error ? <p className="settings-hotkey__error">{error}</p> : null}
+      {shownError ? <p className="settings-hotkey__error">{shownError}</p> : null}
     </div>
   );
 }

@@ -15,6 +15,7 @@ type ControlPanelProps = {
   screenshotCount: number;
   recordingOptions: RecordingOptions;
   hotkey: string | null;
+  hotkeyError: string | null;
   onStart: () => void;
   onStop: () => void;
   onExportWord: () => void;
@@ -35,6 +36,7 @@ export function ControlPanel({
   screenshotCount,
   recordingOptions,
   hotkey,
+  hotkeyError,
   onStart,
   onStop,
   onExportWord,
@@ -45,7 +47,11 @@ export function ControlPanel({
   onHotkeyClear,
 }: ControlPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const hotkeyHint = hotkey ? `快捷键：${formatHotkey(hotkey)}` : "可在设置中开启快捷键";
+  const hotkeyHint = hotkeyError
+    ? "快捷键未生效，可能被其他软件占用，请在设置中更换"
+    : hotkey
+      ? `快捷键：${formatHotkey(hotkey)}`
+      : "可在设置中开启快捷键";
 
   return (
     <>
@@ -119,6 +125,7 @@ export function ControlPanel({
         recording={recording}
         recordingOptions={recordingOptions}
         hotkey={hotkey}
+        hotkeyError={hotkeyError}
         onClose={() => setSettingsOpen(false)}
         onRecordingOptionsChange={onRecordingOptionsChange}
         onHotkeyCommit={onHotkeyCommit}
