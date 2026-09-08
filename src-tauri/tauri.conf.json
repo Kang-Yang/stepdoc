@@ -16,6 +16,7 @@
         "title": "StepDoc",
         "width": 1100,
         "height": 760,
+        "center": true,
         "resizable": true
       },
       {
