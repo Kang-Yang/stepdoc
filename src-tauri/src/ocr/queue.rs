@@ -12,6 +12,13 @@ use crate::constants::{EVENT_OCR_PROGRESS, EVENT_RECORDING_STEP_UPDATED};
 use crate::models::{RecordedStep, StepUpdate};
 use crate::ocr::{self, dump_ocr_debug, OcrCaptureContext};
 
+/// 饱和递减：`cancel_pending` 会把计数清成 0，此时在飞任务稍后的递减（generation 检查与
+/// 实际递减之间存在时序窗口）会把 0 往下绕成 `usize::MAX`，导致 `wait_pending` 卡满超时。
+/// 用不会低于 0 的递减兜底，消除该下溢。
+fn decrement_pending(counter: &AtomicUsize) {
+    let _ = counter.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| value.checked_sub(1));
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OcrProgress {
@@ -79,7 +86,7 @@ impl OcrQueue {
                 if job_generation != generation_worker.load(Ordering::SeqCst) {
                     continue;
                 }
-                pending_worker.fetch_sub(1, Ordering::SeqCst);
+                decrement_pending(&pending_worker);
                 let completed = completed_worker.fetch_add(1, Ordering::SeqCst) + 1;
                 emit_progress(
                     &app,

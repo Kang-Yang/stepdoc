@@ -11,10 +11,15 @@ use crate::utils::{now_timestamp, ocr_debug_dir};
 
 static LAST_DEBUG_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 
+/// 保留最近的调试会话数量，更早的会被清理，防止磁盘无限膨胀。
+const DEBUG_SESSIONS_KEEP: usize = 8;
+
 /// 为一次录制会话创建新的调试文件夹。
 pub fn begin_debug_session() -> Result<PathBuf, String> {
     let root = ocr_debug_dir();
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+
+    cleanup_old_sessions(&root, DEBUG_SESSIONS_KEEP);
 
     let folder_name = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let session_dir = root.join(folder_name);
@@ -37,6 +42,23 @@ pub fn begin_debug_session() -> Result<PathBuf, String> {
     }
 
     Ok(session_dir)
+}
+
+/// 保留最近的 `keep` 个调试会话目录，更早的按目录名（时间戳）排序后删除。
+fn cleanup_old_sessions(root: &Path, keep: usize) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    let mut sessions: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|entry| entry.path())
+        .collect();
+    sessions.sort();
+    let remove = sessions.len().saturating_sub(keep);
+    for path in sessions.into_iter().take(remove) {
+        let _ = fs::remove_dir_all(path);
+    }
 }
 
 pub fn dump_ocr_debug(

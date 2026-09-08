@@ -18,6 +18,12 @@ use crate::screenshot::{
 };
 use crate::utils::now_timestamp;
 
+/// 饱和递减计数：跨会话瞬间 `store(0)` 与旧 worker 在飞递减之间可能竞争，直接把值减到
+/// 0 而非回绕到 `usize::MAX`（会把后续等待卡满超时）。递减不会低于 0。
+fn decrement_counter(counter: &AtomicUsize) {
+    let _ = counter.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| value.checked_sub(1));
+}
+
 pub fn enqueue_capture_job(
     capture_tx: &Mutex<Option<Sender<CaptureJob>>>,
     capture_pending: &AtomicUsize,
@@ -31,8 +37,8 @@ pub fn enqueue_capture_job(
         capture_pending.fetch_add(1, Ordering::SeqCst);
         capture_total.fetch_add(1, Ordering::SeqCst);
         if tx.send(job).is_err() {
-            capture_pending.fetch_sub(1, Ordering::SeqCst);
-            capture_total.fetch_sub(1, Ordering::SeqCst);
+            decrement_counter(capture_pending);
+            decrement_counter(capture_total);
         }
     }
 }
@@ -83,7 +89,7 @@ pub fn run_capture_worker(
                 generation: 0,
             });
         }
-        capture_pending.fetch_sub(1, Ordering::SeqCst);
+        decrement_counter(&capture_pending);
     }
 }
 

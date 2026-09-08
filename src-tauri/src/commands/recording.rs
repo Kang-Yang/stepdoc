@@ -32,16 +32,26 @@ pub fn start_recording(
 
     let options = options.unwrap_or_default();
     state.ocr_debug.store(options.ocr_debug, Ordering::SeqCst);
-    {
-        let mut debug_session = state
-            .ocr_debug_session
-            .lock()
-            .map_err(|error| error.to_string())?;
-        *debug_session = if options.ocr_debug {
-            Some(ocr::begin_debug_session()?)
-        } else {
-            None
-        };
+
+    // 先在锁外解析调试会话再写入状态：`begin_debug_session` 或绑定状态失败时回滚本次会话，
+    // 避免在持有状态锁的情况下调用回滚造成死锁。
+    let debug_session = if options.ocr_debug {
+        match ocr::begin_debug_session() {
+            Ok(dir) => Some(dir),
+            Err(error) => {
+                rollback_start_recording(&state);
+                return Err(error);
+            }
+        }
+    } else {
+        None
+    };
+    match state.ocr_debug_session.lock() {
+        Ok(mut session) => *session = debug_session,
+        Err(error) => {
+            rollback_start_recording(&state);
+            return Err(error.to_string());
+        }
     }
 
     state.recording_paused.store(false, Ordering::SeqCst);
@@ -82,9 +92,13 @@ pub fn start_recording(
 
     let (capture_tx, capture_rx) = mpsc::channel();
     {
-        let mut sender = capture_tx_holder
-            .lock()
-            .map_err(|error| error.to_string())?;
+        let mut sender = match capture_tx_holder.lock() {
+            Ok(guard) => guard,
+            Err(error) => {
+                rollback_start_recording(&state);
+                return Err(error.to_string());
+            }
+        };
         *sender = Some(capture_tx);
     }
 
@@ -115,11 +129,41 @@ pub fn start_recording(
         screenshot_cache,
     );
 
-    show_recording_bar(&app)?;
+    // 悬浮窗就绪后才真正进入录制；失败则回滚本次会话，避免留下半挂起的录制状态。
+    if let Err(error) = show_recording_bar(&app) {
+        rollback_start_recording(&state);
+        return Err(error);
+    }
     minimize_main_window(&app);
     let _ = app.emit_to(MAIN_WINDOW_LABEL, EVENT_RECORDING_STARTED, ());
 
     Ok(())
+}
+
+/// 撤销一次尚未完成的 `start_recording`：复位状态标志、丢弃捕获通道、停止抓屏缓存。
+/// 供启动中途失败（调试会话 / 悬浮窗 / 状态绑定失败）时回滚，避免留下 `recording=true`、
+/// 缓存仍在抓屏的半挂起状态。worker 线程会因捕获通道被停用而自行收尾。
+fn rollback_start_recording(state: &AppState) {
+    state.recording.store(false, Ordering::SeqCst);
+    state.recording_paused.store(false, Ordering::SeqCst);
+    state.ocr_debug.store(false, Ordering::SeqCst);
+    if let Ok(mut session) = state.ocr_debug_session.lock() {
+        *session = None;
+    }
+    if let Ok(mut sender) = state.capture_tx.lock() {
+        *sender = None;
+    }
+    if let Ok(mut timing) = state.recording_timing.lock() {
+        *timing = RecordingTiming::default();
+    }
+    if let Ok(mut steps) = state.steps.lock() {
+        steps.clear();
+    }
+    if let Ok(mut key_buffer) = state.key_buffer.lock() {
+        key_buffer.chars.clear();
+        key_buffer.last_event = 0;
+    }
+    state.screenshot_cache.stop();
 }
 
 #[tauri::command]
