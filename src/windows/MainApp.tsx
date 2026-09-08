@@ -33,8 +33,6 @@ export default function MainApp() {
     elapsedMs,
     steps,
     setSteps,
-    setRecording,
-    setRecordingPaused,
     setElapsedMs,
   } = useRecordingSession();
   const { busy, error, run, setBusy, setError } = useAsyncAction();
@@ -94,13 +92,12 @@ export default function MainApp() {
     beginRecording();
   };
 
+  // 停止后的最终状态（步骤、录制标志等）统一由 recordingStopped 事件驱动更新，
+  // 这里只负责触发后端收尾，避免最终步骤经两条通道重复写入——重写路径在
+  // “收尾时又开始了新会话”的竞态下会把旧步骤误塞回新会话。
   const handleStop = () =>
     run(async () => {
-      const finalSteps = await stopRecording();
-      setSteps(finalSteps);
-      setRecording(false);
-      setRecordingPaused(false);
-      setElapsedMs(0);
+      await stopRecording();
     });
 
   const handleClear = () =>
