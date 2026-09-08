@@ -5,7 +5,8 @@ use docx_rs::{
     AlignmentType, Docx, LineSpacing, LineSpacingType, Paragraph, Pic, Run, RunFonts, Style,
     StyleType,
 };
-use image::GenericImageView;
+use image::codecs::jpeg::JpegEncoder;
+use image::{ColorType, GenericImageView, ImageEncoder};
 
 use crate::models::RecordedStep;
 
@@ -157,12 +158,42 @@ fn prepare_image_for_docx(base64: &str) -> Option<Pic> {
     }
 
     let (display_w, display_h) = display_size(width, height);
+
+    // 超过正文宽度上限的高分屏/4K 截图，缩小后再重新编码嵌入，避免把悬殊的原图整张塞进文档；
+    // 未超限的小图原样嵌入即可。
+    let embedded = if width > MAX_IMAGE_WIDTH_PX {
+        let resized = image.resize_exact(
+            display_w,
+            display_h,
+            image::imageops::FilterType::Lanczos3,
+        );
+        encode_jpeg(&resized, 90)?
+    } else {
+        raw
+    };
+
     Some(
-        Pic::new(&raw).size(
+        Pic::new(&embedded).size(
             display_w.saturating_mul(EMU_PER_PX),
             display_h.saturating_mul(EMU_PER_PX),
         ),
     )
+}
+
+/// 把图片按指定 JPEG 质量编码为字节。
+fn encode_jpeg(image: &image::DynamicImage, quality: u8) -> Option<Vec<u8>> {
+    let rgb = image.to_rgb8();
+    let mut out = Cursor::new(Vec::new());
+    let encoder = JpegEncoder::new_with_quality(&mut out, quality);
+    encoder
+        .write_image(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            ColorType::Rgb8,
+        )
+        .ok()?;
+    Some(out.into_inner())
 }
 
 fn display_size(width: u32, height: u32) -> (u32, u32) {
