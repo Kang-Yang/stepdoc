@@ -12,6 +12,8 @@ mod screenshot;
 mod utils;
 mod window;
 
+use tauri::Manager;
+
 use models::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -29,6 +31,16 @@ pub fn run() {
                 .build(),
         )
         .manage(AppState::default())
+        // Closing the main window is how the user quits StepDoc. Exit explicitly instead of
+        // relying on "exit when the last window closes": any window that happens to be alive
+        // but hidden would otherwise leave a phantom process running in the background.
+        .on_window_event(|window, event| {
+            if window.label() == constants::MAIN_WINDOW_LABEL
+                && matches!(event, tauri::WindowEvent::Destroyed)
+            {
+                window.app_handle().exit(0);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::recording::start_recording,
             commands::recording::stop_recording,
