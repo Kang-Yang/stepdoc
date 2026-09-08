@@ -9,6 +9,9 @@ use crate::models::RecordedStep;
 
 /// 全局调色板容纳的颜色数上限。
 const PALETTE_COLORS: usize = 256;
+/// 抖动误差阈值（欧氏距离平方）。映射到色板后的残差若不超过该值，就不把误差扩散出去，
+/// 从而让平面区域和文字边缘保持干净、不发麻；只有明显落色（如渐变深色过渡）才抖动。
+const DITHER_THRESHOLD_SQ: f32 = 768.0;
 
 /// 逐帧流式导出 GIF：不同帧同时放进内存。
 ///
@@ -16,10 +19,9 @@ const PALETTE_COLORS: usize = 256;
 /// 再逐帧解码→合成→抖动→写入，单帧在写完后随即释放。内存只被有界的直方图和单帧合成图
 /// 顶住，不随帧数增长，即使教程有几帧也只是各副本同驻存。
 pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
-    // —— 第一遍：画布尺寸 + 颜色直方图 ——
+    // —— 第一遍：只确定画布尺寸（不要所有帧的像素同时驻留） ——
     let mut canvas_w: u32 = 0;
     let mut canvas_h: u32 = 0;
-    let mut histogram: HashMap<u32, u64> = HashMap::new();
     let mut count = 0usize;
 
     for step in steps {
@@ -27,15 +29,9 @@ pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
             continue;
         };
         let image = decode_step_image(base64)?;
-        let fit = fit_step_image_for_gif(&image, GIF_EXPORT_MAX_WIDTH);
-        let (w, h) = fit.dimensions();
+        let (w, h) = fit_step_image_for_gif(&image, GIF_EXPORT_MAX_WIDTH).dimensions();
         canvas_w = canvas_w.max(w);
         canvas_h = canvas_h.max(h);
-        for px in fit.to_rgba8().as_raw().chunks_exact(4) {
-            *histogram
-                .entry(pack_rgb(px[0], px[1], px[2]))
-                .or_insert(0) += 1;
-        }
         count += 1;
     }
 
@@ -45,18 +41,17 @@ pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
 
     let width = u16::try_from(canvas_w).map_err(|_| "GIF 画面过宽".to_string())?;
     let height = u16::try_from(canvas_h).map_err(|_| "GIF 画面过高".to_string())?;
-    let (palette, lut) = build_palette(&histogram);
 
     // GIF 延迟以厘秒为单位存储。
     let delay = (GIF_FRAME_DELAY_MS / 10) as u16;
 
-    // —— 第二遍：逐帧编码，单帧只做一次迭代就走 ——
+    // —— 第二遍：逐帧编码，每帧携带自己的局部调色板 ——
     let frames = steps.iter().filter_map(|step| step.image_base64.as_ref()).map(|base64| {
         let image = decode_step_image(base64)?;
         let fit = fit_step_image_for_gif(&image, GIF_EXPORT_MAX_WIDTH);
         Ok::<_, String>(compose_gif_frame(&fit, canvas_w, canvas_h))
     });
-    write_gif_frames(&palette, &lut, width, height, delay, frames)
+    write_gif_frames(width, height, delay, frames)
 }
 
 /// 把三个 8 位通道压成 24 位颜色键。
@@ -117,9 +112,13 @@ fn build_nearest_lut(palette: &[u8]) -> Vec<u8> {
 /// 而且由于 UI 截图大多共享同一组调色板，通常还能缩小文件体积。不做抖动的最邻近颜色映射
 /// 会把渐变和抗锯齿边缘变成生硬的分层色带——也就是经典的"截图 GIF 看起来很丑"的瑕疵——
 /// 因此改用误差扩散来映射像素。
+/// 用每帧各自的局部调色板（该帧独占全部 `PALETTE_COLORS` 名额）逐帧写入：
+/// 文字的抗锯齿灰阶等中间色能进色板，边缘更锐利；误差扩散只作用于超出抖动阈值的像素，
+/// 抑制平坦区域和文字边缘的细颗粒噪声。
+///
+/// 全局色表仅传一个占位表——真正目测颜色由帧内的局部色表提供。这样既避开全局表
+/// 让所有帧去瓜分同一份颜色名额的“越训越糊”，又保持了逐帧流式、单帧用完即释放。
 fn write_gif_frames(
-    palette: &[u8],
-    lut: &[u8],
     width: u16,
     height: u16,
     delay: u16,
@@ -127,7 +126,9 @@ fn write_gif_frames(
 ) -> Result<Vec<u8>, String> {
     let (width_usize, height_usize) = (width as usize, height as usize);
     let mut output = Vec::new();
-    let mut encoder = GifEncoder::new(&mut output, width, height, palette)
+    // 兜底全局色表：只是合法占位，真实颜色由每帧局部表覆盖。
+    let fallback = vec![0u8; 3 * PALETTE_COLORS];
+    let mut encoder = GifEncoder::new(&mut output, width, height, &fallback)
         .map_err(|error| format!("初始化 GIF 编码器失败: {error}"))?;
     encoder
         .set_repeat(Repeat::Infinite)
@@ -138,12 +139,14 @@ fn write_gif_frames(
 
     for frame in frames {
         let composed = frame?;
-        let indices = dither_frame(&composed, &mut work, lut, palette, width_usize, height_usize);
+        let (palette, lut) = build_local_palette(&composed);
+        let indices = dither_frame(&composed, &mut work, &lut, &palette, width_usize, height_usize);
         let gif_frame = GifFrame {
             delay,
             dispose: DisposalMethod::Keep,
             width,
             height,
+            palette: Some(palette),
             buffer: std::borrow::Cow::Borrowed(indices.as_slice()),
             ..Default::default()
         };
@@ -157,10 +160,21 @@ fn write_gif_frames(
     Ok(output)
 }
 
+/// 从单帧像素统计直方图，构建该帧专属的局部调色板与最近邻查找表。
+fn build_local_palette(frame: &RgbaImage) -> (Vec<u8>, Vec<u8>) {
+    let mut histogram: HashMap<u32, u64> = HashMap::new();
+    for px in frame.as_raw().chunks_exact(4) {
+        *histogram
+            .entry(pack_rgb(px[0], px[1], px[2]))
+            .or_insert(0) += 1;
+    }
+    build_palette(&histogram)
+}
+
 /// 用 Floyd–Steinberg 误差扩散（蛇形扫描，ffmpeg/gifski 一类编码器的默认抖动方式）把单帧映射到
-/// 调色板索引。颜色已恰好落在调色板条目上的像素（也就是截图里真实出现过的主流颜色）不累积误差，
-/// 因此平坦的 UI 区域能保持完全干净；其余颜色经查找表取最近邻，量化误差再扩散到邻近像素，
-/// 而不是形成硬性色带。
+/// 调色板索引，但只在残差超出 `DITHER_THRESHOLD_SQ` 时才把误差扩散开：颜色与色板足够接近
+/// (平坦 UI、抗锯齿文字主体)的像素不做噪声扰动，保持清晰；明显落色的渐变/阴影才扩散误差，
+/// 避免硬性色带。
 fn dither_frame(
     frame: &RgbaImage,
     work: &mut [f32],
@@ -202,22 +216,25 @@ fn dither_frame(
                 g - mapped[1] as f32,
                 b - mapped[2] as f32,
             );
-            let dir = if left_to_right { 1i32 } else { -1i32 };
-            let mut push = |dx: i32, dy: i32, weight: f32| {
-                let nx = x as i32 + dx;
-                let ny = y as i32 + dy;
-                if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
-                    return;
-                }
-                let j = (ny as usize * width + nx as usize) * 3;
-                work[j] += er * weight;
-                work[j + 1] += eg * weight;
-                work[j + 2] += eb * weight;
-            };
-            push(dir, 0, 7.0 / 16.0);
-            push(-dir, 1, 3.0 / 16.0);
-            push(0, 1, 5.0 / 16.0);
-            push(dir, 1, 1.0 / 16.0);
+            // 残差很小就不扩散误差，保持平面和文字边缘干净无噪点。
+            if er * er + eg * eg + eb * eb > DITHER_THRESHOLD_SQ {
+                let dir = if left_to_right { 1i32 } else { -1i32 };
+                let mut push = |dx: i32, dy: i32, weight: f32| {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
+                        return;
+                    }
+                    let j = (ny as usize * width + nx as usize) * 3;
+                    work[j] += er * weight;
+                    work[j + 1] += eg * weight;
+                    work[j + 2] += eb * weight;
+                };
+                push(dir, 0, 7.0 / 16.0);
+                push(-dir, 1, 3.0 / 16.0);
+                push(0, 1, 5.0 / 16.0);
+                push(dir, 1, 1.0 / 16.0);
+            }
         }
     }
     indices
@@ -303,17 +320,7 @@ mod tests {
             RgbaImage::from_pixel(8, 4, Rgba([20, 20, 20, 255])),
             RgbaImage::from_pixel(8, 4, Rgba([30, 30, 30, 255])),
         ];
-        let mut histogram = HashMap::new();
-        for frame in &frames {
-            for px in frame.as_raw().chunks_exact(4) {
-                *histogram
-                    .entry(pack_rgb(px[0], px[1], px[2]))
-                    .or_insert(0) += 1;
-            }
-        }
-        let (palette, lut) = build_palette(&histogram);
-        let bytes = write_gif_frames(&palette, &lut, 8, 4, 180, frames.into_iter().map(Ok))
-            .expect("encode");
+        let bytes = write_gif_frames(8, 4, 180, frames.into_iter().map(Ok)).expect("encode");
         assert_eq!(&bytes[0..6], b"GIF89a");
 
         let mut offset = 13;
@@ -339,7 +346,8 @@ mod tests {
                 let flags = bytes[offset + 9];
                 offset += 10;
                 if flags & 0x80 != 0 {
-                    offset += 2 << (flags & 7);
+                    // 局部色表出现时，按与全局色表相同的字节数（条目数 ×3）跳过去。
+                    offset += 3 * (2 << (flags & 7));
                 }
                 offset += 1;
                 while bytes[offset] != 0 {
