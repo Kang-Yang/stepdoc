@@ -59,22 +59,72 @@ fn pack_rgb(r: u8, g: u8, b: u8) -> u32 {
     ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
 }
 
-/// 从颜色直方图构建调色板：取出现频率最高的最多 `PALETTE_COLORS` 种原始颜色作为色板，
-/// 使色板每一项都是截图里真实出现的颜色——主流平面 UI 区域几乎不落色；
-/// 再用一个 15 位查找表（RGB 各取高 5 位）把任意颜色预映射到最近邻的色板索引，
-/// 供逐帧抖动时毫秒级取到映射。
+/// 从颜色直方图按"中位切分"构建调色板：反复挑出当前 RGB 里跨度最大的通道，在加权中位处把
+/// 该条桶切成两块，直到名额占满。这样名额不再只偏向大块的灰白背景，彩色图标等像素虽少、
+/// 但颜色跨度大的区域也能分到专属条目；每桶代表色取该桶内出现最多的真实颜色，保证色值
+/// 就是截图里感知存在的颜色。最后配一个 15 位（每通道高 5 位）最近邻查找表，供逐帧抖动快速取色。
 fn build_palette(histogram: &HashMap<u32, u64>) -> (Vec<u8>, Vec<u8>) {
-    let mut entries: Vec<(u32, u64)> = histogram
-        .iter()
-        .map(|(&color, &count)| (color, count))
-        .collect();
-    entries.sort_by(|a, b| b.1.cmp(&a.1)); // 按出现次数降序
+    let mut buckets: Vec<Vec<(u32, u64)>> = vec![histogram.iter().map(|(&c, &n)| (c, n)).collect()];
 
-    let palette: Vec<u8> = entries
-        .iter()
-        .take(PALETTE_COLORS)
-        .flat_map(|&(color, _)| [(color >> 16) as u8, (color >> 8) as u8, color as u8])
-        .collect();
+    while buckets.len() < PALETTE_COLORS {
+        // 找到跨度过最大且仍可再切的桶与通道。
+        let mut best: Option<(usize, usize)> = None;
+        let mut best_range = 0u64;
+        for (bidx, bucket) in buckets.iter().enumerate() {
+            if bucket.len() < 2 {
+                continue;
+            }
+            let mut min = [u32::MAX; 3];
+            let mut max = [0u32; 3];
+            for &(color, _) in bucket {
+                let [r, g, b] = [color >> 16, (color >> 8) & 0xff, color & 0xff];
+                for ch in 0..3 {
+                    min[ch] = min[ch].min([r, g, b][ch]);
+                    max[ch] = max[ch].max([r, g, b][ch]);
+                }
+            }
+            let (channel, range) = (0..3)
+                .map(|ch| (ch, (max[ch] - min[ch]) as u64))
+                .max_by_key(|&(_, r)| r)
+                .unwrap();
+            if range > best_range {
+                best_range = range;
+                best = Some((bidx, channel));
+            }
+        }
+        let Some((bidx, channel)) = best else { break };
+
+        let mut bucket = buckets.swap_remove(bidx);
+        bucket.sort_by_key(|&(color, _)| match channel {
+            0 => color >> 16,
+            1 => (color >> 8) & 0xff,
+            _ => color & 0xff,
+        });
+        let total: u64 = bucket.iter().map(|&(_, n)| n).sum();
+        let mut acc = 0u64;
+        let mut cut = 0usize;
+        for (i, &(_, n)) in bucket.iter().enumerate() {
+            acc += n;
+            cut = i;
+            if acc * 2 >= total {
+                break;
+            }
+        }
+        // 别让切点落在末位——必须保证两半都不为空。
+        if cut + 1 >= bucket.len() {
+            cut = bucket.len() - 2;
+        }
+        let right = bucket.split_off(cut + 1);
+        buckets.push(bucket);
+        buckets.push(right);
+    }
+
+    // 每桶代表色取其中出现最多的真实颜色。
+    let mut palette: Vec<u8> = Vec::with_capacity(buckets.len() * 3);
+    for bucket in &buckets {
+        let &(color, _) = bucket.iter().max_by_key(|&&(_, n)| n).unwrap();
+        palette.extend([(color >> 16) as u8, (color >> 8) as u8, color as u8]);
+    }
 
     let lut = build_nearest_lut(&palette);
     (palette, lut)
@@ -277,6 +327,40 @@ mod tests {
         let image = DynamicImage::ImageRgba8(RgbaImage::from_pixel(320, 200, Rgba([0, 0, 0, 255])));
         let frame = compose_gif_frame(&image, 640, 200);
         assert_eq!(frame.dimensions(), (640, 200));
+    }
+
+    /// 中位切分必须给少量但高饱和的"图标"颜色留出专属色板，而不是让大背景灰把名额占光、
+    /// 让彩色被映射成发闷的近似色。
+    #[test]
+    fn median_cut_reserves_entries_for_colorful_icons() {
+        let mut frame = RgbaImage::new(64, 16);
+        for px in frame.pixels_mut() {
+            *px = Rgba([245, 246, 248, 255]); // 大量浅灰背景
+        }
+        // 少量高饱和主色，模拟彩色图标。
+        frame.put_pixel(2, 2, Rgba([255, 0, 0, 255]));
+        frame.put_pixel(3, 3, Rgba([0, 255, 0, 255]));
+        frame.put_pixel(4, 4, Rgba([0, 0, 255, 255]));
+
+        let mut histogram = HashMap::new();
+        for px in frame.as_raw().chunks_exact(4) {
+            *histogram
+                .entry(pack_rgb(px[0], px[1], px[2]))
+                .or_insert(0) += 1;
+        }
+        let (palette, _) = build_palette(&histogram);
+
+let palette_chunks = palette.chunks_exact(3);
+        for &(r, g, b) in &[(255u8, 0u8, 0u8), (0, 255, 0), (0, 0, 255)] {
+            let hit = palette_chunks.clone().any(|c| {
+                let dr = c[0] as i32 - r as i32;
+                let dg = c[1] as i32 - g as i32;
+                let db = c[2] as i32 - b as i32;
+                dr * dr + dg * dg + db * db <= 30 * 30
+            });
+            assert!(hit, "调色板中应保留接近 ({r},{g},{b}) 的真实颜色");
+        }
+        assert!(palette_chunks.len() <= PALETTE_COLORS, "调色板不得超过 256 项");
     }
 
     /// 抖动必须让平坦区域保持无噪声（那里的量化误差为零），同时把渐变展开到多个调色板条目，
