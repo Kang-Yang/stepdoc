@@ -38,6 +38,7 @@ uuid = { version = "1", features = ["v4"] }
 rapidocr-core = "0.2"
 docx-rs = "0.4"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

@@ -21,6 +21,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // 强制单实例运行：再次启动 exe 时，把新实例的参数转交给已运行的进程，而不是再拉起一个
+        //（否则会抢占全局快捷键、复制录制状态），然后把已存在的主窗口重新带到前台。
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window(constants::MAIN_WINDOW_LABEL) {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
