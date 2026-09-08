@@ -12,6 +12,9 @@ use crate::models::RecordedStep;
 
 /// DOCX 正文中的最大显示宽度（约 A4 内容区加页边距的宽度）。
 const MAX_IMAGE_WIDTH_PX: u32 = 520;
+/// 内嵌图片的像素宽度上限。与显示尺寸分离：显示上限负责版式，内嵌上限负责清晰度，
+/// 避免把超高分辨率(4K/高分屏)原图整张塞入文档，同时保证缩放/打印不糊。
+const MAX_EMBED_WIDTH_PX: u32 = 2048;
 const EMU_PER_PX: u32 = 9525;
 
 const FONT_SONG: &str = "宋体";
@@ -157,16 +160,17 @@ fn prepare_image_for_docx(base64: &str) -> Option<Pic> {
         return None;
     }
 
+    // 显示尺寸与内嵌分辨率分开计算：前者把大图按比例缩到正文宽度（520px 版式上限），
+    // 后者的像素分辨率另外设一个较高的上限，保证清晰度。
     let (display_w, display_h) = display_size(width, height);
-
-    // 超过正文宽度上限的高分屏/4K 截图，缩小后再重新编码嵌入，避免把悬殊的原图整张塞进文档；
-    // 未超限的小图原样嵌入即可。
-    let embedded = if width > MAX_IMAGE_WIDTH_PX {
+    let embedded = if width > MAX_EMBED_WIDTH_PX {
+        let (embed_w, embed_h) = embed_size(width, height);
         let resized = image.resize_exact(
-            display_w,
-            display_h,
+            embed_w,
+            embed_h,
             image::imageops::FilterType::Lanczos3,
         );
+        // 超过内嵌上限的大图缩放后重编码，显著减小体积；分辨率仍远高于显示尺寸，不会糊。
         encode_jpeg(&resized, 90)?
     } else {
         raw
@@ -206,4 +210,13 @@ fn display_size(width: u32, height: u32) -> (u32, u32) {
         .round()
         .max(1.0) as u32;
     (display_w, display_h)
+}
+
+/// 按宽度上限等比算出的内嵌像素尺寸，用于决定缩放到多大的分辨率再编码。
+fn embed_size(width: u32, height: u32) -> (u32, u32) {
+    let embed_w = MAX_EMBED_WIDTH_PX;
+    let embed_h = ((height as f64) * (embed_w as f64 / width as f64))
+        .round()
+        .max(1.0) as u32;
+    (embed_w, embed_h)
 }
