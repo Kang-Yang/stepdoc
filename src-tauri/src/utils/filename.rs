@@ -24,8 +24,8 @@ pub fn sanitize_filename(name: &str) -> String {
     }
 }
 
-/// Default export file name: `标题_YYYYMMDD_HHMMSS.ext`. The fixed-width timestamp keeps files
-/// sorted by name = sorted by time, and repeated exports of the same title never collide.
+/// 默认导出文件名：`标题_YYYYMMDD_HHMMSS.ext`。定宽时间戳让文件按名称排序即等于按
+/// 时间排序，且同一标题的重复导出也不会互相冲突。
 pub fn timestamped_filename(title: &str, extension: &str) -> String {
     let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
     format!("{}_{}.{}", sanitize_filename(title), stamp, extension)

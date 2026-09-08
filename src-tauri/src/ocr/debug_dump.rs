@@ -11,7 +11,7 @@ use crate::utils::{now_timestamp, ocr_debug_dir};
 
 static LAST_DEBUG_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 
-/// Creates a new debug folder for one recording session.
+/// 为一次录制会话创建新的调试文件夹。
 pub fn begin_debug_session() -> Result<PathBuf, String> {
     let root = ocr_debug_dir();
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;

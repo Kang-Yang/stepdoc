@@ -21,7 +21,7 @@ pub fn close_recording_bar(app: &AppHandle) {
     });
 }
 
-/// Hit-test using bounds cached on the main thread. Safe to call from the input hook thread.
+/// 使用在主线程上缓存的边界做点击命中测试。可从输入钩子线程安全地调用。
 pub fn is_point_on_recording_bar(x: f64, y: f64) -> bool {
     let bounds = RECORDING_BAR_BOUNDS
         .read()

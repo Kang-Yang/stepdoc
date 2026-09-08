@@ -37,8 +37,8 @@ pub struct AppState {
     pub ocr_debug: Arc<AtomicBool>,
     pub ocr_debug_session: Arc<Mutex<Option<PathBuf>>>,
     pub ocr_queue: Arc<OcrQueue>,
-    /// Currently registered global recording hotkey, kept so it can be unregistered when the
-    /// user replaces or clears it. `None` means no hotkey is active.
+    /// 当前注册的全局录制快捷键，保留它以便在用户更换或清除快捷键时注销。
+    /// `None` 表示当前没有启用的快捷键。
     pub registered_hotkey: Mutex<Option<Shortcut>>,
 }
 

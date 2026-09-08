@@ -106,7 +106,7 @@ pub fn is_confident_click_label(text: &str) -> bool {
     cjk >= 2 || alnum >= 2
 }
 
-/// Legacy fallback when no scored candidate exists. Prefer the click-centered crop.
+/// 当不存在任何评分候选项时的旧式回退。优先采用以点击为中心的裁剪。
 pub fn pick_fallback_label<'a, I>(picks: I) -> Option<String>
 where
     I: IntoIterator<Item = (&'a str, Option<&'a str>)>,
@@ -140,13 +140,11 @@ fn label_for_region<'a>(picks: &[(&'a str, Option<&'a str>)], name: &str) -> Opt
         .and_then(|(_, label)| *label)
 }
 
-/// Score a candidate for picking across all regions. `click_distance_sq` is the squared pixel
-/// distance from the real click point in screenshot space; `reference_px` is a region-independent
-/// length (the centre crop's height) so the same absolute distance normalizes identically in
-/// every crop — normalizing by each crop's own size let a distant label cross the close-bonus
-/// threshold in a wider neighbouring crop and steal the pick. A candidate far from the actual
-/// click — e.g. a multi-char window title centred in some neighbouring crop — is heavily
-/// discounted, so the genuine button under the cursor wins over its own local crop rank.
+/// 为跨区域挑选候选打分。`click_distance_sq` 是候选项到真实点击点（截图坐标空间）的平方像素
+/// 距离；`reference_px` 是一个不依赖区域的长度（中心裁剪的高度），使相同的绝对距离
+/// 在每一个裁剪里都能归一化成同样的程度——若按各裁剪自身尺寸归一化，较远的标签会在更宽的
+/// 相邻裁剪里越过“临近加分”阈值而抢走选择。与真实点击相距较远的候选项——例如中心落在某个
+/// 相邻裁剪里的多字符窗口标题——会被大幅降权，因此光标下的真实按钮能胜过它所在局部裁剪的排名。
 pub fn candidate_pick_score(
     text: &str,
     source: &str,
@@ -165,8 +163,8 @@ pub fn candidate_pick_score(
         reference * 2.0
     };
     let relative = (pixel_dist / reference).clamp(0.0, 2.0);
-    // Weight proximity to the click more heavily than text length so a shorter but on-target
-    // button label outranks a longer title that is merely centred in its own crop.
+    // 把与点击的接近程度看得比文本长度更重，使更短却正对点击的按钮标签，胜过一段
+    // 只是在其所在裁剪区中居中的较长标题。
     let pen = (relative * 140.0).round() as i32;
     let mut score = quality.saturating_sub(pen);
 
@@ -188,7 +186,7 @@ pub fn is_digit_only_label(text: &str) -> bool {
     !trimmed.is_empty() && trimmed.chars().all(|ch| ch.is_ascii_digit())
 }
 
-/// Collapse Windows OCR CJK inter-character spaces: "企 业 定 制" → "企业定制".
+/// 折叠 Windows OCR 产生的 CJK 字符间空格："企 业 定 制" → "企业定制"。
 pub fn normalize_label(text: &str) -> String {
     let chars: Vec<char> = text.trim().chars().collect();
     let mut out = String::with_capacity(chars.len());
@@ -298,7 +296,7 @@ fn is_repeated_glyph_noise(text: &str) -> bool {
         && is_cjk(chars[0])
 }
 
-/// Single chars that are usually OCR debris (radicals / components), not UI labels.
+/// 单字符的汉字，通常是 OCR 残片（偏旁 / 部件），而不是 UI 标签。
 fn is_unlikely_single_cjk(ch: char) -> bool {
     matches!(
         ch,
@@ -397,10 +395,9 @@ mod tests {
         assert!(line > word, "line={line} word={word}");
     }
 
-    /// Regression from a real recording: the click was on the「新建文本文件」menu row (37px from
-    /// its line centre) while「新建文件.」sits 33px below. The old per-crop normalization gave
-    /// the wider right-crop copy of 新建文件. a close bonus and stole the pick. With the
-    /// region-independent reference the on-click row must outrank the lower item.
+    /// 来自真实录制的回归测试：点击落在「新建文本文件」菜单行（距行中心 37px），
+    /// 而「新建文件.」位于其下方 33px。旧有的按每个裁剪归一化的逻辑曾让更宽右侧裁剪里的
+    /// 新建文件获得“临近加分”并抢走选择。改用与区域无关的参考后，被点击的行必须胜过下方项。
     #[test]
     fn on_click_row_beats_lower_item_at_similar_distance() {
         let on_click_row = candidate_pick_score("新建文本文件", "line", 1370.0, 72.0);
@@ -408,7 +405,7 @@ mod tests {
         assert!(on_click_row > lower_item, "{on_click_row} vs {lower_item}");
     }
 
-    /// 33px from the click must NOT receive the close bonus (reference 72 -> threshold 8.6px).
+    /// 距点击 33px 不得获得“临近加分”（reference 72 -> 阈值 8.6px）。
     #[test]
     fn close_bonus_does_not_apply_at_menu_item_distance() {
         let score = candidate_pick_score("新建文件", "line", 1105.0, 72.0);

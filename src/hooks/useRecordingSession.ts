@@ -121,7 +121,7 @@ export function useRecordingSession() {
         setElapsedMs(status.elapsedMs);
         setRecordingPaused(status.paused);
       } catch {
-        // ignore polling errors while main window is minimized
+        // 主窗口最小化时忽略轮询失败
       }
     };
 

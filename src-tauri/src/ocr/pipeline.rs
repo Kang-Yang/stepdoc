@@ -3,12 +3,12 @@ use image::RgbaImage;
 use crate::ocr::report::OcrRegionReport;
 use crate::ocr::text_pick::{is_confident_click_label, pick_fallback_label};
 
-/// Scan click-centered crop regions in priority order (center → right → above → below).
-/// Stops early once a confident label is found unless `full_scan` is set (OCR debug).
+/// 按优先顺序扫描以点击为中心的裁剪区域（center → right → above → below）。
+/// 一旦找到可信的标签就提前停止，除非设置了 `full_scan`（OCR 调试模式）。
 ///
-/// `crop_origins` holds each crop's top-left in screenshot pixels (parallel to `crops`), and
-/// `click_point` is the real click in screenshot pixels — both are threaded into candidates so
-/// ranking happens by true proximity to the click, not by each crop's local centre.
+/// `crop_origins` 保存每个裁剪在截图像素中的左上角（与 `crops` 平行存放），而
+/// `click_point` 是真实点击在截图像素中的位置——两者都被传入候选项，
+/// 使排序基于与点击的真实接近程度，而不是每个裁剪的局部中心。
 pub fn scan_crop_regions<F>(
     crops: &[RgbaImage],
     region_labels: &[String],
@@ -50,8 +50,8 @@ where
     regions
 }
 
-/// Pick the strongest candidate across all visual capture regions. Region scan order is only a
-/// tie-breaker, so a nearby, higher-scored label wins over incidental neighboring text.
+/// 在所有视觉捕获区域中选取最强候选。区域扫描顺序仅作为平局裁决，
+/// 因此邻近且得分更高的标签能胜过偶然出现的相邻文本。
 pub fn pick_best_label_from_regions(regions: &[OcrRegionReport]) -> Option<String> {
     let mut best: Option<(i32, usize, String)> = None;
 
@@ -91,16 +91,15 @@ fn region_tie_break_priority(region: &str, index: usize) -> usize {
     }
 }
 
-/// Classify what the click actually landed on, using OCR geometry and crop pixels:
-/// - `text`: an recognised line's box contains the click (or sits within a hair of it) -> a
-///   readable label exists.
-/// - `icon`: no text at the click, but pixels in a small window around the click form a glyph
-///   (e.g. an X close button) -> the click has no textual label.
-/// - `blank`: neither text nor a glyph near the click.
+/// 结合 OCR 几何信息与裁剪像素，判定点击到底落在什么对象上：
+/// - `text`：某条已识别文本行的框内包含点击点（或在其极近距离内）-> 存在可读标签。
+/// - `icon`：点击处无文本，但点击附近小窗口内的像素构成一个字形（诸如一个 X 关闭按钮）
+///   -> 该次点击没有文本标签。
+/// - `blank`：点击附近既无文本也无字形。
 ///
-/// Containment beats centre-distance: a click on a wide control lands far from the line's
-/// centre yet inside its box, while a click on a tab's close X sits just outside the text box.
-/// This stops icon clicks from being labelled with OCR garbage in a neighbouring crop.
+/// 「包含」优先于「中心距离」：点击宽控件时，落点距行中心很远却仍在框内；
+/// 而点击标签页的关闭 X 时，落点恰好位于文本框外侧一点。这能防止图标点击
+/// 被相邻区域里零散的 OCR 输出错误地打上标签。
 pub fn classify_click_kind(
     crops: &[RgbaImage],
     crop_origins: &[(u32, u32)],
@@ -116,8 +115,8 @@ pub fn classify_click_kind(
     let crop = crops.get(center_index);
     let (crop_w, crop_h) = crop.map(|c| c.dimensions()).unwrap_or((240, 72));
 
-    // 1. Primary signal: the click point falls inside some accepted line's box (with a small
-    //    margin so clicks on the control's padding still count as text clicks).
+    // 1. 主信号：点击点落在某个已接受文本行的框内（留出少量余量，因此点击控件的内边距
+    //    仍算作文本点击）。
     let box_contains_click = |grow_min: f32, grow_factor: f32| -> bool {
         for (index, region) in regions.iter().enumerate() {
             let Some((ox, oy)) = crop_origins.get(index).copied() else {
@@ -149,9 +148,9 @@ pub fn classify_click_kind(
         return "text".to_string();
     }
 
-    // 2. Secondary: only for candidates without box geometry. When a box IS known and the click
-    //    is outside it, centre proximity must not rescue the label — a menu item a few pixels
-    //    above a blank-gap click would otherwise claim the click as its own.
+    // 2. 次信号：仅针对没有框几何信息的候选项。当框已知且点击位于框外时，
+    //    中心距离不得「拯救」该标签——否则空白间隙上方几像素处的菜单项会错误地
+    //    把这次点击据为己有。
     let nearest_textless = regions[center_index]
         .candidates
         .iter()
@@ -166,10 +165,10 @@ pub fn classify_click_kind(
         return "text".to_string();
     }
 
-    // 3. No text box at the click: ink in the window means a drawn control. The click sits on
-    //    that glyph — an icon — unless a text box still reaches it with a slightly looser margin
-    //    (OCR boxes can clip a few pixels), in which case trust the text. The window is small so
-    //    neighbouring rows' ink (menu bar above, header below) cannot fake a glyph.
+    // 3. 点击处没有文本框：窗口内的墨迹表示绘制了一个控件。点击落在这个字形上——
+    //    即图标——除非某个文本框仍能以更宽松的余量够到它（OCR 框可能裁剪掉几像素），
+    //    此时应信任文本。窗口非常小，因此相邻行（上方的菜单栏、下方的标题栏）的墨迹
+    //    不会伪造出一个字形。
     let Some(crop) = crop else {
         return "blank".to_string();
     };
@@ -188,8 +187,8 @@ pub fn classify_click_kind(
     "blank".to_string()
 }
 
-/// Fraction of pixels in a `win`-sized square around `(cx, cy)` that differ strongly from the
-/// local background (luma contrast > 70/255). Large for drawn glyphs, ~0 for empty space.
+/// 在以 `(cx, cy)` 为中心的 `win` 像素见方区域内，与局部背景差异较大
+/// （亮度对比度 > 70/255）的像素占比。对绘制的字形偏大，对空白区域约为 0。
 fn glyph_density_near(image: &RgbaImage, cx: u32, cy: u32, win: u32) -> f32 {
     let (image_w, image_h) = image.dimensions();
     if image_w == 0 || image_h == 0 {
@@ -323,9 +322,9 @@ mod tests {
     #[test]
     fn click_proximity_beats_a_distant_longer_title() {
         let regions = vec![
-            // "资源管理器" sits above the click, far away -> low click-rank score.
+            // "资源管理器" 位于点击上方且较远，-> 点击排名得分低。
             region("above", "220x56", vec![candidate_with_click("资源管理器", 110, 22500.0, 22)]),
-            // "文件" is the real button, right at the click point -> high click-rank score.
+            // "文件" 是真实按钮，正位于点击处 -> 点击排名得分高。
             region("center", "240x72", vec![candidate_with_click("文件", 66, 100.0, 118)]),
             region("right", "280x72", vec![candidate_with_click("文件扩展名", 30, 900.0, 20)]),
         ];
@@ -333,8 +332,8 @@ mod tests {
         assert_eq!(pick_best_label_from_regions(&regions).as_deref(), Some("文件"));
     }
 
-    /// When the click-point crop has no text (icon-only button), a button on the adjacent right
-    /// region still beats a distant window title across the scan.
+    /// 当点击点所在裁剪区域没有文本（纯图标按钮）时，扫描范围内相邻右侧区域的按钮
+    /// 仍能胜过较远的窗口标题。
     #[test]
     fn nearby_right_button_beats_distant_title_when_center_is_icon_only() {
         let regions = vec![
@@ -354,8 +353,8 @@ mod tests {
         vec![region("center", "240x72", candidates)]
     }
 
-    /// Nearest recognised line sits right at the click -> a text click, even if the centre crop
-    /// also contains stray glyph pixels.
+    /// 最近的可识别文本行正好位于点击处 -> 这是文本点击，即使中心裁剪
+    /// 也包含零散的字形像素。
     #[test]
     fn classifies_text_when_line_is_at_the_click() {
         let crop = bg_crop(26);
@@ -368,8 +367,8 @@ mod tests {
         );
     }
 
-    /// An X-close-button click: no text near the click point, but the crop pixels form a glyph
-    /// there -> icon click, never a stray neighbour label.
+    /// 一个 X 关闭按钮点击：点击点附近没有文本，但其周围的裁剪像素构成一个字形
+    /// -> 图标点击，绝不会被当作相邻的零散标签。
     #[test]
     fn classifies_icon_when_glyph_is_at_the_click_but_text_is_far() {
         let mut crop = bg_crop(26);
@@ -379,7 +378,7 @@ mod tests {
             }
         }
         let origins = vec![(0, 0), (56, 0), (0, 0), (0, 40)];
-        // "选超语" hallucination sits 60px away from the click.
+        // "选超语" 幻觉文本位于点击处 60px 远。
         let regions = center_regions(vec![candidate_with_click("选超语", 78, 3600.0, 40)]);
 
         assert_eq!(
@@ -388,7 +387,7 @@ mod tests {
         );
     }
 
-    /// Nothing at or near the click point, and no glyph -> blank click.
+    /// 点击点及其附近什么都没有，也没有字形 -> 空白点击。
     #[test]
     fn classifies_blank_when_nothing_is_at_the_click() {
         let crop = bg_crop(26);
@@ -401,10 +400,9 @@ mod tests {
         );
     }
 
-    /// Regression from a real recording (step 1): the click landed in the blank gap between the
-    /// menu bar and the sidebar header — 8px below 编辑's box (outside its padding margin) and
-    /// 33px from 资源管理器. The menu item's centre proximity must not claim this as a text
-    /// click when its box is known to exclude the click.
+    /// 来自真实录制的回归测试（第 1 步）：点击落在菜单栏与侧边栏标题之间的空白间隙——
+    /// 位于「编辑」框下方 8px（在内边距之外），且距「资源管理器」33px。当已知其框排除点击时，
+    /// 该菜单项的「中心接近度」不得把这判定为文本点击。
     #[test]
     fn blank_gap_click_below_a_menu_item_is_not_rescued_by_center_distance() {
         let crop = bg_crop(26);
@@ -420,8 +418,8 @@ mod tests {
         );
     }
 
-    /// OCR boxes can clip; a click just outside a tight box but on the text's own ink must stay
-    /// a text click rather than being downgraded to an icon.
+    /// OCR 框可能裁剪；一个落在紧贴方框之外但位于文本自身墨迹上的点击，必须保持文本点击
+    /// 而不是降级为图标。
     #[test]
     fn click_on_text_ink_just_outside_a_clipped_box_stays_text() {
         let mut crop = bg_crop(26);
@@ -439,9 +437,8 @@ mod tests {
         );
     }
 
-    /// Regression from a real recording (step 2): the click landed on the left part of the wide
-    /// 「新建文本文件」menu row — 37px from the line CENTRE but inside its box. Centre-distance
-    /// alone misfiled this; containment must classify it as a text click.
+/// 来自真实录制的回归测试（第 2 步）：点击落在宽的「新建文本文件」菜单行的左侧——
+    /// 距行中心 37px 但在框内。仅凭中心距离此前发生了误判；包含关系必须将其判定为文本点击。
     #[test]
     fn classifies_text_when_click_is_inside_the_line_box() {
         let crop = bg_crop(26);
@@ -458,9 +455,8 @@ mod tests {
         );
     }
 
-    /// Regression from a real recording (step 3): the click landed on a tab's close X, 12px
-    /// right of the "Untitled-1" text box. The box must not swallow the click, and the glyph at
-    /// the click makes it an icon click — never the tab label.
+    /// 来自真实录制的回归测试（第 3 步）：点击落在标签页的关闭 X 上，位于 "Untitled-1" 文本框
+    /// 右侧 12px。该框不得吞掉这次点击，点击处的字形使其成为图标点击——绝不会是标签页标签。
     #[test]
     fn tab_close_x_click_is_icon_not_the_tab_label() {
         let mut crop = bg_crop(26);
@@ -482,14 +478,14 @@ mod tests {
         );
     }
 
-    /// A click just inside the box margin (on the control's padding) still counts as text.
+    /// 落在方框余量内部（位于控件的内边距）的点击仍算作文本点击。
     #[test]
     fn click_on_control_padding_next_to_text_counts_as_text() {
         let crop = bg_crop(26);
         let origins = vec![(0, 0), (56, 0), (0, 0), (0, 40)];
         let regions = center_regions(vec![candidate_at("保存", (40.0, 20.0, 50.0, 20.0), 900.0)]);
 
-        // Box [40,90]x[20,40], margin 5 -> [35,95]x[15,45]. Click (93, 30) is inside.
+        // 方框 [40,90]x[20,40]，余量 5 -> [35,95]x[15,45]。点击 (93, 30) 在内部。
         assert_eq!(
             classify_click_kind(&[crop], &origins, Some((93.0, 30.0)), &regions),
             "text"

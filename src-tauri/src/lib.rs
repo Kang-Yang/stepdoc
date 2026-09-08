@@ -1,11 +1,11 @@
 mod capture;
 mod commands;
 mod constants;
-// Public for dev probes under `examples/` that exercise the export pipeline on synthetic data.
+// 公开给 `examples/` 下的开发探针使用，这些探针在合成数据上测试导出流水线。
 pub mod export;
-// Public so probes can construct RecordedStep instances for the export pipeline.
+// 公开以便探针能为导出流水线构造 RecordedStep 实例。
 pub mod models;
-// Public for dev probes under `examples/` that replay saved debug crops.
+// 公开给 `examples/` 下的开发探针使用，这些探针重放已保存的调试裁剪图。
 pub mod ocr;
 mod platform;
 mod screenshot;
@@ -39,9 +39,8 @@ pub fn run() {
                 .build(),
         )
         .manage(AppState::default())
-        // Closing the main window is how the user quits StepDoc. Exit explicitly instead of
-        // relying on "exit when the last window closes": any window that happens to be alive
-        // but hidden would otherwise leave a phantom process running in the background.
+        // 关闭主窗口是用户退出 StepDoc 的方式。显式调用退出，而不是依赖“最后一个窗口
+        // 关闭时退出”：否则任何仍存活但隐藏的窗口都会在后台留下一个幽灵进程。
         .on_window_event(|window, event| {
             if window.label() == constants::MAIN_WINDOW_LABEL
                 && matches!(event, tauri::WindowEvent::Destroyed)

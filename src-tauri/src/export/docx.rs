@@ -9,14 +9,14 @@ use image::GenericImageView;
 
 use crate::models::RecordedStep;
 
-/// Max display width in the DOCX body (~A4 content area with margins).
+/// DOCX 正文中的最大显示宽度（约 A4 内容区加页边距的宽度）。
 const MAX_IMAGE_WIDTH_PX: u32 = 520;
 const EMU_PER_PX: u32 = 9525;
 
 const FONT_SONG: &str = "宋体";
 const CREATOR_XML: &[u8] = b"<dc:creator>stepdoc</dc:creator>";
 const LAST_MODIFIED_BY_XML: &[u8] = b"<cp:lastModifiedBy>stepdoc</cp:lastModifiedBy>";
-/// DOCX font size is measured in half-points.
+/// DOCX 字号以半磅为单位。
 const SIZE_BODY: usize = 24;
 const SIZE_STEP: usize = 28;
 const SIZE_TITLE: usize = 44;
@@ -120,7 +120,7 @@ pub fn render_docx(title: &str, steps: &[RecordedStep]) -> Result<Vec<u8>, Strin
 }
 
 fn apply_doc_author(buffer: &mut Vec<u8>) {
-    // docx-rs stores core.xml uncompressed; keep replacements the same length.
+    // docx-rs 以未压缩方式存储 core.xml；替换时需保持原长度。
     replace_bytes(
         buffer,
         b"<dc:creator>unknown</dc:creator>",

@@ -75,7 +75,7 @@ pub fn start_recording(
     let ocr_queue = state.ocr_queue.clone();
     let app_handle = app.clone();
 
-    // Also discards any jobs still queued from a previous session that hadn't finished draining.
+    // 同时丢弃上一会话中尚未排空、仍留在队列里的任务。
     ocr_queue.cancel_pending();
     capture_pending.store(0, Ordering::SeqCst);
     capture_total.store(0, Ordering::SeqCst);
@@ -209,8 +209,8 @@ fn stop_recording_inner(app: AppHandle, state: AppState) -> Result<Vec<RecordedS
     }
     state.screenshot_cache.stop();
 
-    // Return the user to the results view immediately. OCR completion runs in this command's
-    // background task and will emit EVENT_RECORDING_STOPPED when the final steps are ready.
+    // 立即把用户带回结果视图。OCR 的完成过程运行在该命令的后台任务中，
+    // 当最终步骤就绪时会发出 EVENT_RECORDING_STOPPED。
     close_recording_bar(&app);
     restore_main_window_from_recording(&app);
     state
@@ -222,9 +222,8 @@ fn stop_recording_inner(app: AppHandle, state: AppState) -> Result<Vec<RecordedS
         state.ocr_queue.progress(),
     );
 
-    // Wait (almost) indefinitely for the capture and OCR queues to drain: emitting
-    // EVENT_RECORDING_STOPPED early is what showed placeholder descriptions after the progress
-    // bar ended, with the real results arriving seconds later via step-update events.
+    // 等待采集与 OCR 队列（几乎）无限直到排空：过早发出 EVENT_RECORDING_STOPPED
+    // 正是进度条结束后仍显示占位描述、而真实结果要几秒后才通过步骤更新事件到达的原因。
     wait_for_capture_jobs(&state.capture_pending, STOP_DRAIN_TIMEOUT);
     state.ocr_queue.wait_pending(STOP_DRAIN_TIMEOUT);
     let steps = state
@@ -233,8 +232,8 @@ fn stop_recording_inner(app: AppHandle, state: AppState) -> Result<Vec<RecordedS
         .map_err(|error| error.to_string())?
         .clone();
 
-    // A new session (or a clear) may have happened while we were waiting; only close out the UI
-    // if no newer recording owns it — otherwise the stale stopped event would wipe its state.
+    // 在等待期间可能发生了新会话（或清空）；只有当没有更新的录制会话占用它时才收尾 UI，
+    // 否则过期的停止事件会清掉它的状态。
     if !state.recording.load(Ordering::SeqCst) {
         let _ = app.emit_to(MAIN_WINDOW_LABEL, EVENT_RECORDING_STOPPED, steps.clone());
     }
@@ -244,9 +243,8 @@ fn stop_recording_inner(app: AppHandle, state: AppState) -> Result<Vec<RecordedS
 
 #[tauri::command]
 pub fn clear_steps(state: State<'_, AppState>) -> Result<(), String> {
-    // Clearing must also stop the recognition: dropping queued OCR jobs ends the finalizing
-    // progress immediately instead of leaving the worker grinding through steps that no longer
-    // exist, and lets the pending stop flow finalize right away.
+    // 清空也必须同时停止识别：丢弃排队的 OCR 任务能够立即结束收尾进度，
+    // 而不是让 worker 继续处理那些已不存在的步骤，并让待处理的停止流程得以立即收尾。
     state.ocr_queue.cancel_pending();
     state
         .steps

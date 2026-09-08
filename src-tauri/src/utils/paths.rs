@@ -1,21 +1,21 @@
 use std::path::PathBuf;
 
-/// Persistent app data root, e.g. `%LOCALAPPDATA%\stepdoc` on Windows.
+/// 持久化应用数据根目录，例如 Windows 下的 `%LOCALAPPDATA%\stepdoc`。
 pub fn app_root() -> PathBuf {
     app_data_base().join("stepdoc")
 }
 
-/// RapidOCR model cache (persistent).
+/// RapidOCR 模型缓存（持久化）。
 pub fn ocr_models_dir() -> PathBuf {
     app_root().join("ocr-models")
 }
 
-/// OCR debug dumps when debug mode is enabled (persistent).
+/// 调试模式开启时的 OCR 调试转储（持久化）。
 pub fn ocr_debug_dir() -> PathBuf {
     app_root().join("ocr-debug")
 }
 
-/// Short-lived OCR frame files; kept in system temp for automatic cleanup.
+/// 短生命周期的 OCR 帧文件；放在系统临时目录以便自动清理。
 pub fn ocr_frames_dir() -> PathBuf {
     std::env::temp_dir().join("stepdoc-ocr-frames")
 }

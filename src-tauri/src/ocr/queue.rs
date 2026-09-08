@@ -31,8 +31,8 @@ pub struct OcrJob {
     pub debug_session_dir: Option<PathBuf>,
     pub steps: Arc<Mutex<Vec<RecordedStep>>>,
     pub app: AppHandle,
-    /// Session stamp assigned by `enqueue`; jobs whose stamp no longer matches the queue's
-    /// current generation were cancelled and are dropped without processing.
+    /// 由 `enqueue` 分配的一次会话标记；标记已不再匹配队列当前代际的作业，意味着已被取消，
+    /// 会被直接丢弃而不处理。
     pub generation: usize,
 }
 
@@ -64,8 +64,8 @@ impl OcrQueue {
                 let app = job.app.clone();
                 let job_generation = job.generation;
                 if job_generation != generation_worker.load(Ordering::SeqCst) {
-                    // Cancelled session: the counters were already reset by `cancel_pending`,
-                    // so just drop the job instead of processing it or touching the counters.
+                    // 已取消的会话：`cancel_pending` 已经重置过计数器，因此直接丢弃该任务，
+                    // 既不处理它也不触碰计数器。
                     continue;
                 }
                 emit_progress(
@@ -75,8 +75,7 @@ impl OcrQueue {
                     Some(job.step_no),
                 );
                 process_job(job);
-                // Cancellation may have fired while this job was running; skip the counter
-                // updates so `cancel_pending`'s reset stays authoritative.
+                // 本任务运行期间可能触发了取消；跳过计数器的更新，使 `cancel_pending` 的重置保持权威。
                 if job_generation != generation_worker.load(Ordering::SeqCst) {
                     continue;
                 }
@@ -108,10 +107,9 @@ impl OcrQueue {
         let _ = self.tx.send(job);
     }
 
-    /// Drops every queued job and zeroes the progress counters. Called when the user clears the
-    /// steps or starts a new session, so stale recognition work neither burns CPU nor keeps the
-    /// progress UI moving for steps that no longer exist. A job already being processed finishes,
-    /// but no longer reports progress.
+    /// 丢弃所有已排队任务并把进度计数器清零。当用户清空步骤或开始新会话时调用，使过期的识别
+    /// 任务既不会白白消耗 CPU，也不会继续为已不存在的步骤推进进度 UI。正在处理的任务会走完，
+    /// 但不再上报进度。
     pub fn cancel_pending(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.pending.store(0, Ordering::SeqCst);
@@ -120,7 +118,7 @@ impl OcrQueue {
         self.completed.store(0, Ordering::SeqCst);
     }
 
-    /// Sets the final number of clicks after the capture queue is closed.
+    /// 在捕获队列关闭后，设置最终的点击数量。
     pub fn set_expected_total(&self, total: usize) {
         self.expected_total.store(total, Ordering::SeqCst);
     }
@@ -203,8 +201,8 @@ fn process_job(job: OcrJob) {
         }
     }
 
-    // Emit on every job, not only when the text changed: a redundant update is cheaper than the
-    // UI staying on the placeholder because an earlier event was swallowed or lost.
+    // 每个任务都触发事件，而不只是文本发生变化时：一次冗余的更新也要比界面停留在占位文本
+    // 上廉价得多，因为更早的事件可能已被吞没或丢失。
     if found {
         let _ = app.emit(
             EVENT_RECORDING_STEP_UPDATED,

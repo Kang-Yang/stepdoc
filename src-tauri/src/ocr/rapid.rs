@@ -64,8 +64,8 @@ pub fn recognize_label_from_crops_with_report(
         };
     }
 
-        // Region-independent distance reference: the centre crop's height (72 design px scaled by
-    // the display factor). Every region must normalize absolute click distances identically.
+        // 与区域无关的距离参考：中心裁剪的高度（72 设计像素乘以显示因子缩放）。
+    // 每个区域都必须以相同的方式归一化绝对点击距离。
     let reference = crops
         .first()
         .map(|crop| crop.height() as f32)
@@ -77,8 +77,7 @@ pub fn recognize_label_from_crops_with_report(
         &context.crop_origins,
         context.click_point,
         full_scan,
-        // Distances normalize against the centre crop's height so every region scores the same
-        // absolute distance identically.
+        // 距离对中心裁剪的高度作归一化，使每个区域对相同的绝对距离都能给出相同得分。
         |region, crop, origin, click_point| {
             analyze_region(region, crop, origin, click_point, reference)
         },
@@ -180,10 +179,9 @@ fn inspect_lines(
             reference,
         );
 
-        // A wide multi-part line is usually several controls OCR'd as one strip (tab bar,
-        // button row). Emit per-segment candidates with proportional sub-boxes so the label
-        // under the click can win over the whole strip. Narrow lines keep a single label —
-        // splitting those would butcher multi-word labels like "Save As".
+        // 一条宽的多段文本行通常是把若干个控件 OCR 成了一条条状（如标签栏、按钮行）。
+        // 逐段生成比例分割的子框候选，使点击下方的标签能够胜过整条条带。窄的行保持单一
+        // 标签——拆分它们会破坏多词标签，比如 "Save As"。
         if line.rect.2 >= reference * 2.0 {
             for (segment, segment_rect) in line_segments(&line.text, line.rect) {
                 record_candidate(
@@ -209,8 +207,8 @@ fn inspect_lines(
     (picked, candidates, raw_lines, raw_words)
 }
 
-/// Split a raw OCR line into whitespace-separated segments with estimated crop-local sub-rects.
-/// Widths are distributed proportionally to rendered character width (CJK ≈ 2 units).
+/// 将原始 OCR 文本行按空白拆分成若干段，并为每段估算裁剪局部的子矩形。
+/// 宽度按渲染出来的字符宽度按比例分配（CJK ≈ 2 个单位）。
 fn line_segments(raw: &str, rect: (f32, f32, f32, f32)) -> Vec<(String, (f32, f32, f32, f32))> {
     let parts: Vec<&str> = raw.split_whitespace().collect();
     if parts.len() < 2 {
@@ -261,7 +259,7 @@ fn record_candidate(
     reference: f32,
 ) {
     let mut reject_reason = reject_reason(&text).map(str::to_string);
-    // Very low recognition confidence is OCR debris even when the text looks plausible.
+    // 即使文本看起来合理，极低的识别置信度也属于 OCR 碎片噪声。
     if reject_reason.is_none() && ocr_confidence.is_some_and(|confidence| confidence < 0.6) {
         reject_reason = Some("low_confidence".to_string());
     }
@@ -270,7 +268,7 @@ fn record_candidate(
     let distance = rect
         .map(|bounds| center_distance(bounds, center_x, center_y))
         .unwrap_or(f32::MAX);
-    // Distance from the real click point matters more than local closeness inside a crop.
+    // 与真实点击点的距离比裁剪内部的局接近程度更重要。
     let click_distance = click_distance_sq(rect, origin, click_point);
     let score = if accepted {
         candidate_pick_score(&text, source, click_distance, reference)
@@ -300,8 +298,8 @@ fn record_candidate(
     }
 }
 
-/// Squared pixel distance from a line centre (crop-local, mapped into screenshot space by
-/// `origin`) to the real click point. Falls back to a large value when unavailable.
+/// 从行中心（裁剪局部坐标，经 `origin` 映射到截图坐标）到真实点击点的像素距离的平方。
+    /// 无法得到时回退为一个大值。
 fn click_distance_sq(
     rect: Option<(f32, f32, f32, f32)>,
     origin: Option<(u32, u32)>,
@@ -399,8 +397,8 @@ fn init_engine() -> Result<RapidOcr, String> {
     std::fs::create_dir_all(&model_dir).map_err(|error| error.to_string())?;
 
     let cache = ModelCache::new(&model_dir);
-    // Visual click crops can include neighboring text. Detect text first so recognition receives
-    // individual lines rather than a guessed strip.
+    // 可视点击裁剪可能包含相邻文本。先检测文本，使识别收到的是一行行独立的文本
+    // 而不是一条猜测出的长条带。
     let pipeline = PipelineConfig {
         use_det: true,
         use_cls: false,
@@ -427,8 +425,8 @@ mod tests {
         }
     }
 
-    /// A wide merged strip (tab bar / button row) must yield the segment under the click, not
-    /// the whole strip: clicking「查看」describes 查看, not 主页共享查看.
+    /// 一条宽的被合并的文本条带（标签栏 / 按钮行）必须输出点击所在的那一段，而不是整条带：
+    /// 点击「查看」描述的是「查看」，而非「主页共享查看」。
     #[test]
     fn wide_merged_line_picks_the_segment_under_the_click() {
         let lines = vec![line("主页 共享 查看", (10.0, 10.0, 180.0, 20.0), 0.95)];
@@ -443,7 +441,7 @@ mod tests {
         );
     }
 
-    /// Narrow multi-word labels ("Save As") are single controls — no segment split.
+    /// 窄的多词标签（"Save As"）是单一控件——不做段拆分。
     #[test]
     fn narrow_multi_word_line_stays_one_label() {
         let lines = vec![line("Save As", (60.0, 26.0, 70.0, 18.0), 0.99)];
@@ -454,7 +452,7 @@ mod tests {
         assert!(!candidates.iter().any(|c| c.source == "segment"));
     }
 
-    /// Sub-0.6 confidence lines are OCR debris even when the text looks plausible.
+    /// 置信度低于 0.6 的文本行即使看起来合理，也属于 OCR 碎片噪声。
     #[test]
     fn low_confidence_lines_are_rejected() {
         let lines = vec![line("选超语", (139.0, 57.0, 52.0, 14.0), 0.55)];

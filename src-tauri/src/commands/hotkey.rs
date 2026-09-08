@@ -6,12 +6,11 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use crate::constants::{EVENT_HOTKEY_RECORDING_TOGGLE, MAIN_WINDOW_LABEL};
 use crate::models::AppState;
 
-/// Runs on every press of the registered global hotkey.
+/// 在每次按下已注册的全局热键时运行。
 ///
-/// The actual start/stop flow lives in the main window (it owns the recording options, the
-/// "replace existing steps" confirmation and the busy guards), so this only hands the request
-/// over as an event. When idle, the main window is brought back first so any confirmation
-/// dialog becomes visible even if the user minimized it.
+/// 实际的开始/停止流程位于主窗口（它拥有录制选项、"替换已有步骤"的确认逻辑和忙碌状态守卫），
+/// 因此这里只是把请求以事件形式转交出去。空闲时先会把主窗口带回前台，这样即使用户将其最小化，
+/// 任何确认对话框也能显示出来。
 pub fn handle_hotkey_pressed(app: &AppHandle) {
     let recording = app.state::<AppState>().recording.load(Ordering::SeqCst);
     if !recording {
@@ -24,8 +23,8 @@ pub fn handle_hotkey_pressed(app: &AppHandle) {
     let _ = app.emit_to(MAIN_WINDOW_LABEL, EVENT_HOTKEY_RECORDING_TOGGLE, ());
 }
 
-/// Validates and parses a shortcut description like `Ctrl+Alt+KeyR` (modifiers plus a W3C
-/// `KeyboardEvent.code`, which is what the settings UI captures and stores).
+/// 校验并解析形如 `Ctrl+Alt+KeyR` 的快捷键描述（修饰键加一个 W3C `KeyboardEvent.code`，
+/// 这正是设置界面所捕获并存储的内容）。
 fn parse_shortcut(spec: &str) -> Result<Shortcut, String> {
     let trimmed = spec.trim();
     if trimmed.is_empty() {
@@ -56,8 +55,8 @@ fn parse_shortcut(spec: &str) -> Result<Shortcut, String> {
         .map_err(|error| format!("无法识别的快捷键「{spec}」：{error}"))
 }
 
-/// Registers (or clears) the global recording hotkey. Called at app startup with the persisted
-/// value and again whenever the user changes it in settings.
+/// 注册（或清除）全局录制热键。在应用启动时用持久化的值调用一次，
+/// 之后每当用户在设置中修改热键时也会再次调用。
 #[tauri::command]
 pub fn set_recording_hotkey(
     app: AppHandle,
@@ -70,8 +69,8 @@ pub fn set_recording_hotkey(
         .lock()
         .map_err(|error| error.to_string())?;
 
-    // Always drop the previous binding first so re-registering the same combination is
-    // idempotent (React StrictMode runs the startup registration effect twice in dev builds).
+    // 总是先释放上一次的绑定，这样重新注册同一个组合是幂等的
+    // （React StrictMode 在开发构建中会执行启动注册副作用两次）。
     let previous = registered.take();
     if let Some(previous) = previous {
         let _ = manager.unregister(previous);
@@ -84,7 +83,7 @@ pub fn set_recording_hotkey(
 
     let parsed = parse_shortcut(spec)?;
     if let Err(error) = manager.register(parsed) {
-        // Best effort: restore the previous binding so the app keeps a working hotkey.
+        // 尽力而为：恢复上一次绑定，让应用仍保有可用的热键。
         if let Some(previous) = previous {
             let _ = manager.register(previous);
             *registered = Some(previous);

@@ -79,8 +79,7 @@ pub fn run_capture_worker(
                 debug_session_dir,
                 steps: steps.clone(),
                 app: app.clone(),
-                // `enqueue` stamps the current queue generation; this placeholder is always
-                // overwritten before the job is processed.
+                // `enqueue` 会写入当前的队列代数；这个占位值在任务被处理前总会被覆盖。
                 generation: 0,
             });
         }

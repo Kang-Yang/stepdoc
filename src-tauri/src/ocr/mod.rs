@@ -19,9 +19,9 @@ pub use queue::{OcrJob, OcrQueue};
 #[derive(Clone, Debug, Default)]
 pub struct OcrCaptureContext {
     pub region_labels: Vec<String>,
-    /// Top-left origin of each crop in screenshot pixels, aligned with the crop list.
+    /// 每个裁剪在截图像素中的左上角原点，与裁剪列表对齐。
     pub crop_origins: Vec<(u32, u32)>,
-    /// Screenshot-space absolute click point, used to rank candidates by real proximity.
+    /// 截图空间中的绝对点击点，用于按真实接近程度对候选排序。
     pub click_point: Option<(f64, f64)>,
     pub capture_source: Option<String>,
 }
@@ -55,7 +55,7 @@ pub fn recognize_click_label_from_crops_with_report(
         }
         #[cfg(not(windows))]
         {
-            // Platform has no fallback; keep the unavailable report.
+            // 平台没有回退方案；保留不可用的报告。
         }
     }
 

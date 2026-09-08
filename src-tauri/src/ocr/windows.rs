@@ -19,7 +19,7 @@ pub fn recognize_label_from_crops_with_report(
     full_scan: bool,
 ) -> OcrPipelineReport {
     let engine = engine_language_tag();
-    // Region-independent distance reference: the centre crop's height (see rapid.rs).
+    // 与区域无关的距离参考：中心裁剪的高度（参见 rapid.rs）。
     let reference = crops
         .first()
         .map(|crop| crop.height() as f32)
@@ -198,7 +198,7 @@ fn record_candidate(
     }
 
     let mut reject_reason = reject_reason(&text).map(str::to_string);
-    // Very low recognition confidence is OCR debris even when the text looks plausible.
+    // 即使文本看起来合理，极低的识别置信度也属于 OCR 碎片噪声。
     if reject_reason.is_none() && ocr_confidence.is_some_and(|confidence| confidence < 0.6) {
         reject_reason = Some("low_confidence".to_string());
     }
@@ -207,7 +207,7 @@ fn record_candidate(
     let distance = rect
         .map(|bounds| center_distance(bounds, center_x, center_y))
         .unwrap_or(f32::MAX);
-    // Distance from the real click point matters more than local closeness inside a crop.
+    // 与真实点击点的距离比裁剪内部的局部接近程度更重要。
     let click_distance = click_distance_sq(rect, origin, click_point);
     let score = if accepted {
         candidate_pick_score(&text, source, click_distance, reference)
@@ -238,8 +238,8 @@ fn record_candidate(
     }
 }
 
-/// Squared pixel distance from a line centre (crop-local, mapped into screenshot space by
-/// `origin`) to the real click point. Falls back to a large value when unavailable.
+/// 从行中心（裁剪局部坐标，经 `origin` 映射到截图空间）到真实点击点的平方像素距离。
+/// 不可用时回退到一个大值。
 fn click_distance_sq(
     rect: Option<(f32, f32, f32, f32)>,
     origin: Option<(u32, u32)>,

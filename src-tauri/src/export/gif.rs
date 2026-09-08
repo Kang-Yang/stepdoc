@@ -47,16 +47,14 @@ pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
     encode_gif(&composed, GIF_FRAME_DELAY_MS)
 }
 
-/// Write every frame with ONE shared global palette, Floyd–Steinberg dithering and
-/// `DisposalMethod::Keep`.
+/// 用所有帧共享的单个全局调色板、Floyd–Steinberg 抖动和 `DisposalMethod::Keep` 写入每一帧。
 ///
-/// image 0.24's `GifEncoder` hardcodes `DisposalMethod::Background` on every frame and gives each
-/// frame its own palette. Background disposal + the implicit "clear to background" (which is
-/// undefined here) makes many viewers flash between frames; per-frame palettes also let identical
-/// colours drift across frames. Keying all frames to a single palette keeps colours stable and
-/// usually shrinks the file, since UI screenshots share most of their palette. Nearest-colour
-/// mapping without dithering turns gradients and anti-aliased edges into hard bands — the classic
-/// "screenshot GIF looks ugly" artifact — so pixels are mapped with error diffusion instead.
+/// image 0.24 的 `GifEncoder` 在每一帧上都硬编码了 `DisposalMethod::Background`，并给每帧单独
+/// 一个调色板。背景清除加上隐式的"清除为背景"（此处未定义）会让许多查看器在帧间闪烁；
+/// 每帧独立的调色板还会让相同的颜色在各帧间漂移。把所有帧统一到一个调色板能保持颜色稳定，
+/// 而且由于 UI 截图大多共享同一组调色板，通常还能缩小文件体积。不做抖动的最邻近颜色映射
+/// 会把渐变和抗锯齿边缘变成生硬的分层色带——也就是经典的"截图 GIF 看起来很丑"的瑕疵——
+/// 因此改用误差扩散来映射像素。
 fn encode_gif(frames: &[RgbaImage], delay_ms: u32) -> Result<Vec<u8>, String> {
     let (width, height) = frames.first().map(|frame| frame.dimensions()).unwrap_or((1, 1));
     let width = u16::try_from(width).map_err(|_| "GIF 画面过宽".to_string())?;
@@ -78,7 +76,7 @@ fn encode_gif(frames: &[RgbaImage], delay_ms: u32) -> Result<Vec<u8>, String> {
             .set_repeat(Repeat::Infinite)
             .map_err(|error| format!("设置 GIF 循环失败: {error}"))?;
 
-        // GIF delays are stored in centiseconds.
+        // GIF 延迟以厘秒为单位存储。
         let delay = (delay_ms / 10) as u16;
         for indices in &indexed_frames {
             let gif_frame = GifFrame {
@@ -100,10 +98,9 @@ fn encode_gif(frames: &[RgbaImage], delay_ms: u32) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
-/// Map each frame to palette indices with Floyd–Steinberg error diffusion (serpentine scan, the
-/// default dither of ffmpeg/gifski-style encoders). Pixels whose colour already sits on a palette
-/// entry accumulate zero error, so flat UI regions stay perfectly clean while gradients, window
-/// shadows and anti-aliased text spread their quantization error to neighbours instead of banding.
+/// 用 Floyd–Steinberg 误差扩散（蛇形扫描，ffmpeg/gifski 一类编码器的默认抖动方式）把每一帧映射到
+/// 调色板索引。颜色已落在调色板条目上的像素不会累积误差，因此平坦的 UI 区域能保持完全干净，
+/// 而渐变、窗口阴影和抗锯齿文字会把量化误差扩散到邻近像素，而不是形成硬性色带。
 fn dither_frames(
     frames: &[RgbaImage],
     quantizer: &NeuQuant,
@@ -212,18 +209,18 @@ mod tests {
         assert_eq!(frame.dimensions(), (640, 200));
     }
 
-    /// Dithering must leave flat regions noise-free (zero quantization error there) while
-    /// spreading a gradient across multiple palette entries instead of hard banding.
+    /// 抖动必须让平坦区域保持无噪声（那里的量化误差为零），同时把渐变展开到多个调色板条目，
+    /// 而不是形成硬性色带。
     #[test]
     fn dither_keeps_flats_clean_and_spreads_gradients() {
         let mut frame = RgbaImage::new(64, 16);
         for y in 0..16 {
             for x in 0..64 {
-                let value = if x < 32 {
-                    26 // flat dark background on the left half
-                } else {
-                    (x * 4) as u8 // rising gradient on the right half
-                };
+let value = if x < 32 {
+                        26 // 左半部分平坦的深色背景
+                    } else {
+                        (x * 4) as u8 // 右半部分递增的渐变
+                    };
                 frame.put_pixel(x, y, Rgba([value, value, value, 255]));
             }
         }
@@ -239,8 +236,8 @@ mod tests {
         assert!(gradient.len() >= 4, "gradient must spread over multiple palette entries, got {gradient:?}");
     }
 
-    /// Disposal must be Keep (no background flash), delay must survive the centisecond
-    /// conversion, the loop must be infinite, and every frame must be present in order.
+    /// Disposal 必须为 Keep（无背景闪烁），延迟必须能经受住厘秒换算，循环必须为无限循环，
+    /// 并且每一帧都必须按顺序存在。
     #[test]
     fn encodes_keep_disposal_infinite_loop_and_delay() {
         let frames = vec![
