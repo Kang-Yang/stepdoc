@@ -124,13 +124,13 @@ export default function MainApp() {
       }
     });
 
-  const updateStepDescription = (id: string, description: string) => {
+  const updateStepDescription = useCallback((id: string, description: string) => {
     setSteps((prev) => prev.map((step) => (step.id === id ? { ...step, description } : step)));
-  };
+  }, []);
 
-  const removeStep = (id: string) => {
+  const removeStep = useCallback((id: string) => {
     setSteps((prev) => prev.filter((step) => step.id !== id));
-  };
+  }, []);
 
   const updateRecordingOptions = (next: RecordingOptions) => {
     setRecordingOptions(next);

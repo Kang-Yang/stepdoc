@@ -371,8 +371,20 @@ fn with_engine<T>(task: impl FnOnce(&mut RapidOcr) -> Result<T, String>) -> Resu
 
 static ENGINE: OnceLock<Mutex<RapidOcr>> = OnceLock::new();
 static INIT_ERROR: OnceLock<String> = OnceLock::new();
+/// 初始化互斥锁：`ensure_engine` 可能被多个线程同时首次触发（启动预热线程 + 首个识别任务），
+/// 锁住初始化段，避免并发重复下载/构建引擎。
+static INIT_LOCK: Mutex<()> = Mutex::new(());
 
 fn ensure_engine() -> Result<(), String> {
+    if let Some(error) = INIT_ERROR.get() {
+        return Err(error.clone());
+    }
+    if ENGINE.get().is_some() {
+        return Ok(());
+    }
+
+    let _guard = INIT_LOCK.lock().map_err(|error| error.to_string())?;
+    // 获取锁后再次确认，避免两个线程同时都通过了上面的检查。
     if let Some(error) = INIT_ERROR.get() {
         return Err(error.clone());
     }

@@ -1,4 +1,4 @@
-import { useState, type SyntheticEvent } from "react";
+import { memo, useState, type SyntheticEvent } from "react";
 
 import {
   formatStepTime,
@@ -23,10 +23,10 @@ type StepCardProps = {
   recording: boolean;
   onDescriptionChange: (id: string, description: string) => void;
   onRemove: (id: string) => void;
-  onImagePreview: () => void;
+  onImagePreview: (step: Step, index: number) => void;
 };
 
-export function StepCard({
+function StepCardComponent({
   step,
   index,
   total,
@@ -83,7 +83,7 @@ export function StepCard({
             <button
               type="button"
               className="step-image-trigger"
-              onClick={onImagePreview}
+              onClick={() => onImagePreview(step, index)}
               title="点击放大查看"
               aria-label={`放大查看步骤 ${index + 1} 截图`}
             >
@@ -112,3 +112,5 @@ export function StepCard({
     </article>
   );
 }
+
+export const StepCard = memo(StepCardComponent);

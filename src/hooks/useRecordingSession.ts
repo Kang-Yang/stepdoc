@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { getRecordingStatus } from "@/lib/tauri/commands";
 import { TAURI_EVENTS } from "@/lib/tauri/events";
@@ -120,8 +121,12 @@ export function useRecordingSession() {
         if (!active) return;
         setElapsedMs(status.elapsedMs);
         setRecordingPaused(status.paused);
-      } catch {
-        // 主窗口最小化时忽略轮询失败
+      } catch (cause) {
+        // 只有窗口最小化时才静默忽略（此时无人在看界面）；其余失败如实记录，
+        // 避免掩盖真正的后端异常。
+        if (!(await getCurrentWindow().isMinimized())) {
+          console.error("获取录制状态失败:", cause);
+        }
       }
     };
 

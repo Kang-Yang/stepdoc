@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
@@ -33,7 +33,6 @@ pub struct AppState {
     pub capture_pending: Arc<AtomicUsize>,
     pub capture_total: Arc<AtomicUsize>,
     pub screenshot_cache: Arc<ScreenshotCache>,
-    pub recording_session: Arc<AtomicU64>,
     pub ocr_debug: Arc<AtomicBool>,
     pub ocr_debug_session: Arc<Mutex<Option<PathBuf>>>,
     pub ocr_queue: Arc<OcrQueue>,
@@ -54,7 +53,6 @@ impl Default for AppState {
             capture_pending: Arc::new(AtomicUsize::new(0)),
             capture_total: Arc::new(AtomicUsize::new(0)),
             screenshot_cache: Arc::new(ScreenshotCache::default()),
-            recording_session: Arc::new(AtomicU64::new(0)),
             ocr_debug: Arc::new(AtomicBool::new(false)),
             ocr_debug_session: Arc::new(Mutex::new(None)),
             ocr_queue: Arc::new(OcrQueue::spawn()),
@@ -75,7 +73,6 @@ impl Clone for AppState {
             capture_pending: self.capture_pending.clone(),
             capture_total: self.capture_total.clone(),
             screenshot_cache: self.screenshot_cache.clone(),
-            recording_session: self.recording_session.clone(),
             ocr_debug: self.ocr_debug.clone(),
             ocr_debug_session: self.ocr_debug_session.clone(),
             ocr_queue: self.ocr_queue.clone(),

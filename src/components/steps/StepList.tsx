@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { StepCard } from "@/components/steps/StepCard";
 import { StepImageLightbox } from "@/components/steps/StepImageLightbox";
@@ -14,6 +14,11 @@ type StepListProps = {
 export function StepList({ steps, recording, onDescriptionChange, onRemove }: StepListProps) {
   const [preview, setPreview] = useState<{ step: Step; index: number } | null>(null);
 
+  // 稳定的预览回调：避免传入内联闭包，导致 `memo(StepCard)` 因回调引用变化而全部失效。
+  const openPreview = useCallback((step: Step, index: number) => {
+    setPreview({ step, index });
+  }, []);
+
   return (
     <>
       <div className="steps-list">
@@ -26,7 +31,7 @@ export function StepList({ steps, recording, onDescriptionChange, onRemove }: St
             recording={recording}
             onDescriptionChange={onDescriptionChange}
             onRemove={onRemove}
-            onImagePreview={() => setPreview({ step, index })}
+            onImagePreview={openPreview}
           />
         ))}
       </div>

@@ -6,7 +6,7 @@ use tauri::State;
 use tauri::{AppHandle, Emitter};
 
 use crate::capture::{
-    clear_key_buffer, run_capture_worker, spawn_input_listener, wait_for_capture_jobs,
+    clear_key_buffer, ensure_input_listener, run_capture_worker, wait_for_capture_jobs,
 };
 use crate::constants::{
     EVENT_RECORDING_FINALIZING, EVENT_RECORDING_PAUSED, EVENT_RECORDING_RESUMED,
@@ -61,10 +61,8 @@ pub fn start_recording(
         key_buffer.last_event = 0;
     }
 
-    let session_id = state.recording_session.fetch_add(1, Ordering::SeqCst) + 1;
     let recording = state.recording.clone();
     let recording_paused = state.recording_paused.clone();
-    let recording_session = state.recording_session.clone();
     let steps = state.steps.clone();
     let capture_tx_holder = state.capture_tx.clone();
     let capture_pending = state.capture_pending.clone();
@@ -108,11 +106,9 @@ pub fn start_recording(
         );
     });
 
-    spawn_input_listener(
-        session_id,
+    ensure_input_listener(
         recording,
         recording_paused,
-        recording_session,
         capture_tx_holder,
         capture_pending,
         capture_total,
