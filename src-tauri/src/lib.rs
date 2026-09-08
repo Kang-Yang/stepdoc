@@ -1,12 +1,8 @@
 mod capture;
 mod commands;
 mod constants;
-// 临时诊断日志（验证结束后移除）。
-mod debug_log;
 // 公开给 `examples/` 下的开发探针使用，这些探针在合成数据上测试导出流水线。
 pub mod export;
-// 临时调试：上次录制结果落盘，启动时恢复。
-mod last_recording;
 // 公开以便探针能为导出流水线构造 RecordedStep 实例。
 pub mod models;
 // 公开给 `examples/` 下的开发探针使用，这些探针重放已保存的调试裁剪图。
@@ -59,7 +55,6 @@ pub fn run() {
             commands::recording::resume_recording,
             commands::recording::get_recording_status,
             commands::recording::clear_steps,
-            commands::replay::load_last_recording,
             commands::hotkey::set_recording_hotkey,
             commands::export::export_word,
             commands::export::export_gif,

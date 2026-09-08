@@ -278,9 +278,6 @@ fn stop_recording_inner(app: AppHandle, state: AppState) -> Result<Vec<RecordedS
         let _ = app.emit_to(MAIN_WINDOW_LABEL, EVENT_RECORDING_STOPPED, steps.clone());
     }
 
-    // 临时调试：把本次录制落到磁盘，供下次启动时无需重录即可复用。
-    crate::last_recording::save(&steps);
-
     Ok(steps)
 }
 
