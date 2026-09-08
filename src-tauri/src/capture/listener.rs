@@ -30,11 +30,12 @@ pub fn ensure_input_listener(
         return;
     }
 
+    crate::debug_log::log("listener: 启动全局监听线程");
     thread::spawn(move || {
         let mut last_position = (0.0f64, 0.0f64);
         let mut last_click: Option<(u128, f64, f64)> = None;
 
-        let _ = rdev::listen(move |event| {
+        let result = rdev::listen(move |event| {
             if !recording.load(Ordering::SeqCst) || recording_paused.load(Ordering::SeqCst) {
                 return;
             }
@@ -45,14 +46,18 @@ pub fn ensure_input_listener(
                 }
                 EventType::ButtonPress(button) => {
                     let (x, y) = cursor_position().unwrap_or(last_position);
+                    crate::debug_log::log(format!("listener: 检测到按钮 {button:?} (x={x:.0}, y={y:.0})"));
                     if is_point_on_recording_bar(x, y) {
+                        crate::debug_log::log("listener: 命中悬浮录制条，忽略");
                         return;
                     }
 
                     if !should_record_click(&mut last_click, x, y) {
+                        crate::debug_log::log("listener: 命中去抖，忽略");
                         return;
                     }
 
+                    crate::debug_log::log("listener: 通过去抖，进入采集入队");
                     enqueue_capture_job(
                         &capture_tx_holder,
                         &capture_pending,
@@ -68,6 +73,7 @@ pub fn ensure_input_listener(
                 _ => {}
             }
         });
+        crate::debug_log::log(format!("listener: rdev::listen 结束（Err 说明监听失败）: {:?}", result.err()));
     });
 }
 

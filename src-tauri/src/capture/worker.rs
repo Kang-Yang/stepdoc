@@ -65,6 +65,11 @@ pub fn run_capture_worker(
         if let Ok(mut locked) = steps.lock() {
             locked.push(step.clone());
         }
+        crate::debug_log::log(format!(
+            "worker: 已登记步骤 events={} len={}",
+            step.event_type,
+            steps.lock().map(|s| s.len()).unwrap_or(0)
+        ));
         let _ = app.emit(EVENT_RECORDING_STEP, step.clone());
 
         if step.image_base64.is_some() && step.event_type.contains("click") {

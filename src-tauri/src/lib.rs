@@ -1,6 +1,8 @@
 mod capture;
 mod commands;
 mod constants;
+// 临时诊断日志（验证结束后移除）。
+mod debug_log;
 // 公开给 `examples/` 下的开发探针使用，这些探针在合成数据上测试导出流水线。
 pub mod export;
 // 临时调试：上次录制结果落盘，启动时恢复。
