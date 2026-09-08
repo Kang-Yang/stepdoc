@@ -32,6 +32,11 @@ export async function getRecordingStatus(): Promise<RecordingStatus> {
   return invoke<RecordingStatus>("get_recording_status");
 }
 
+/** 临时调试：读取上次保存的录制步骤，启动时用，避免每次都要重新录制。 */
+export async function loadLastRecording(): Promise<Step[]> {
+  return invoke<Step[]>("load_last_recording");
+}
+
 export async function setRecordingHotkey(hotkey: string | null): Promise<void> {
   await invoke("set_recording_hotkey", { shortcut: hotkey });
 }

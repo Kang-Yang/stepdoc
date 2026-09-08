@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { getRecordingStatus } from "@/lib/tauri/commands";
+import { getRecordingStatus, loadLastRecording } from "@/lib/tauri/commands";
 import { TAURI_EVENTS } from "@/lib/tauri/events";
 import type { OcrProgress } from "@/types/recording";
 import type { Step, StepUpdate } from "@/types/step";
@@ -103,6 +103,12 @@ export function useRecordingSession() {
         setOcrProgress(EMPTY_OCR_PROGRESS);
         setElapsedMs(0);
       });
+
+      // 临时调试：启动时恢复上次录制的步骤，避免每次都要手动录制才可以验证导出。
+      const last = await loadLastRecording();
+      if (active && last.length > 0) {
+        setSteps(last);
+      }
     })();
 
     return () => {
