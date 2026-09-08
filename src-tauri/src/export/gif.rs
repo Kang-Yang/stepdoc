@@ -1,25 +1,25 @@
+use std::collections::HashMap;
+
 use base64::{engine::general_purpose::STANDARD, Engine};
-use color_quant::NeuQuant;
 use gif::{DisposalMethod, Encoder as GifEncoder, Frame as GifFrame, Repeat};
 use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 
 use crate::constants::{GIF_EXPORT_MAX_WIDTH, GIF_FRAME_DELAY_MS};
 use crate::models::RecordedStep;
 
-/// 构建全局调色板时对每帧像素的抽样步长。调色板只需要颜色分布，抽一份子集即可，
-/// 同时避免把所有帧的完整像素一次性驻留内存。
-const PALETTE_SAMPLE_STRIDE: usize = 4;
+/// 全局调色板容纳的颜色数上限。
+const PALETTE_COLORS: usize = 256;
 
-/// 逐帧流式导出 GIF：不把所有帧同时放进内存。
+/// 逐帧流式导出 GIF：不同帧同时放进内存。
 ///
-/// 先做一遍“干跑”遍历得到画布尺寸并抽样构建全局调色板，再逐帧解码→合成→抖动→立即写入，
-/// 单帧在写完后随即释放。这样即使教程有上百帧，内存峰值也只停留在“一帧合成图”量级，
-/// 而不是把所有帧的多个副本同时驻留。
+/// 先做一遍“干跑”遍历得到画布尺寸，并统计每帧像素的颜色直方图来构建全局调色板，
+/// 再逐帧解码→合成→抖动→写入，单帧在写完后随即释放。内存只被有界的直方图和单帧合成图
+/// 顶住，不随帧数增长，即使教程有几帧也只是各副本同驻存。
 pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
-    // —— 第一遍：画布尺寸 + 全局调色板采样 ——
+    // —— 第一遍：画布尺寸 + 颜色直方图 ——
     let mut canvas_w: u32 = 0;
     let mut canvas_h: u32 = 0;
-    let mut sampled: Vec<u8> = Vec::new();
+    let mut histogram: HashMap<u32, u64> = HashMap::new();
     let mut count = 0usize;
 
     for step in steps {
@@ -31,10 +31,10 @@ pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
         let (w, h) = fit.dimensions();
         canvas_w = canvas_w.max(w);
         canvas_h = canvas_h.max(h);
-        for (i, px) in fit.to_rgba8().as_raw().chunks_exact(4).enumerate() {
-            if i % PALETTE_SAMPLE_STRIDE == 0 {
-                sampled.extend_from_slice(&px[..3]);
-            }
+        for px in fit.to_rgba8().as_raw().chunks_exact(4) {
+            *histogram
+                .entry(pack_rgb(px[0], px[1], px[2]))
+                .or_insert(0) += 1;
         }
         count += 1;
     }
@@ -45,18 +45,68 @@ pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
 
     let width = u16::try_from(canvas_w).map_err(|_| "GIF 画面过宽".to_string())?;
     let height = u16::try_from(canvas_h).map_err(|_| "GIF 画面过高".to_string())?;
-    let (quantizer, palette) = build_palette(&sampled);
+    let (palette, lut) = build_palette(&histogram);
 
     // GIF 延迟以厘秒为单位存储。
     let delay = (GIF_FRAME_DELAY_MS / 10) as u16;
 
-    // —— 第二遍：逐帧编码，单帧只逗留一个迭代周期 ——
+    // —— 第二遍：逐帧编码，单帧只做一次迭代就走 ——
     let frames = steps.iter().filter_map(|step| step.image_base64.as_ref()).map(|base64| {
         let image = decode_step_image(base64)?;
         let fit = fit_step_image_for_gif(&image, GIF_EXPORT_MAX_WIDTH);
         Ok::<_, String>(compose_gif_frame(&fit, canvas_w, canvas_h))
     });
-    write_gif_frames(&quantizer, &palette, width, height, delay, frames)
+    write_gif_frames(&palette, &lut, width, height, delay, frames)
+}
+
+/// 把三个 8 位通道压成 24 位颜色键。
+fn pack_rgb(r: u8, g: u8, b: u8) -> u32 {
+    ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
+}
+
+/// 从颜色直方图构建调色板：取出现频率最高的最多 `PALETTE_COLORS` 种原始颜色作为色板，
+/// 使色板每一项都是截图里真实出现的颜色——主流平面 UI 区域几乎不落色；
+/// 再用一个 15 位查找表（RGB 各取高 5 位）把任意颜色预映射到最近邻的色板索引，
+/// 供逐帧抖动时毫秒级取到映射。
+fn build_palette(histogram: &HashMap<u32, u64>) -> (Vec<u8>, Vec<u8>) {
+    let mut entries: Vec<(u32, u64)> = histogram
+        .iter()
+        .map(|(&color, &count)| (color, count))
+        .collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1)); // 按出现次数降序
+
+    let palette: Vec<u8> = entries
+        .iter()
+        .take(PALETTE_COLORS)
+        .flat_map(|&(color, _)| [(color >> 16) as u8, (color >> 8) as u8, color as u8])
+        .collect();
+
+    let lut = build_nearest_lut(&palette);
+    (palette, lut)
+}
+
+/// 把 15 位（每通道 5 位）的近似颜色映射到调色板最近邻索引，作为精确映射的快速路径。
+fn build_nearest_lut(palette: &[u8]) -> Vec<u8> {
+    let mut lut = vec![0u8; 1 << 15];
+    for (coarse, slot) in lut.iter_mut().enumerate() {
+        let r8 = (((coarse >> 10) & 31) << 3) | 4;
+        let g8 = (((coarse >> 5) & 31) << 3) | 4;
+        let b8 = ((coarse & 31) << 3) | 4;
+        let mut best = 0u8;
+        let mut best_d = u32::MAX;
+        for (i, channel) in palette.chunks_exact(3).enumerate() {
+            let dr = r8 as i32 - channel[0] as i32;
+            let dg = g8 as i32 - channel[1] as i32;
+            let db = b8 as i32 - channel[2] as i32;
+            let d = (dr * dr + dg * dg + db * db) as u32;
+            if d < best_d {
+                best_d = d;
+                best = i as u8;
+            }
+        }
+        *slot = best;
+    }
+    lut
 }
 
 /// 用所有帧共享的单个全局调色板、Floyd–Steinberg 抖动和 `DisposalMethod::Keep` 写入每一帧。
@@ -68,8 +118,8 @@ pub fn render_gif(steps: &[RecordedStep]) -> Result<Vec<u8>, String> {
 /// 会把渐变和抗锯齿边缘变成生硬的分层色带——也就是经典的"截图 GIF 看起来很丑"的瑕疵——
 /// 因此改用误差扩散来映射像素。
 fn write_gif_frames(
-    quantizer: &NeuQuant,
     palette: &[u8],
+    lut: &[u8],
     width: u16,
     height: u16,
     delay: u16,
@@ -88,7 +138,7 @@ fn write_gif_frames(
 
     for frame in frames {
         let composed = frame?;
-        let indices = dither_frame(&composed, &mut work, quantizer, palette, width_usize, height_usize);
+        let indices = dither_frame(&composed, &mut work, lut, palette, width_usize, height_usize);
         let gif_frame = GifFrame {
             delay,
             dispose: DisposalMethod::Keep,
@@ -107,19 +157,14 @@ fn write_gif_frames(
     Ok(output)
 }
 
-fn build_palette(sampled: &[u8]) -> (NeuQuant, Vec<u8>) {
-    let quantizer = NeuQuant::new(10, 256, sampled);
-    let palette = quantizer.color_map_rgb();
-    (quantizer, palette)
-}
-
 /// 用 Floyd–Steinberg 误差扩散（蛇形扫描，ffmpeg/gifski 一类编码器的默认抖动方式）把单帧映射到
-/// 调色板索引。颜色已落在调色板条目上的像素不会累积误差，因此平坦的 UI 区域能保持完全干净，
-/// 而渐变、窗口阴影和抗锯齿文字会把量化误差扩散到邻近像素，而不是形成硬性色带。
+/// 调色板索引。颜色已恰好落在调色板条目上的像素（也就是截图里真实出现过的主流颜色）不累积误差，
+/// 因此平坦的 UI 区域能保持完全干净；其余颜色经查找表取最近邻，量化误差再扩散到邻近像素，
+/// 而不是形成硬性色带。
 fn dither_frame(
     frame: &RgbaImage,
     work: &mut [f32],
-    quantizer: &NeuQuant,
+    lut: &[u8],
     palette: &[u8],
     width: usize,
     height: usize,
@@ -130,7 +175,6 @@ fn dither_frame(
         dst[2] = px[2] as f32;
     }
 
-    let mut nearest: std::collections::HashMap<u32, u8> = std::collections::HashMap::new();
     let mut indices = vec![0u8; width * height];
     for y in 0..height {
         let left_to_right = y % 2 == 0;
@@ -145,11 +189,11 @@ fn dither_frame(
                     px[2].clamp(0.0, 255.0),
                 )
             };
-            let key = ((r as u8 as u32) << 16) | ((g as u8 as u32) << 8) | b as u8 as u32;
-            let idx = *nearest.entry(key).or_insert_with(|| {
-                let rgba = [r as u8, g as u8, b as u8, 255];
-                quantizer.index_of(&rgba) as u8
-            });
+            let coarse = (((r as u8) >> 3) as usize) << 10
+                | (((g as u8) >> 3) as usize) << 5
+                | ((b as u8) >> 3) as usize;
+            let idx = lut[coarse];
+
             indices[i] = idx;
 
             let mapped = &palette[idx as usize * 3..idx as usize * 3 + 3];
@@ -233,9 +277,15 @@ mod tests {
                 frame.put_pixel(x, y, Rgba([value, value, value, 255]));
             }
         }
-        let (quantizer, palette) = build_palette(frame.as_raw());
+        let mut histogram = HashMap::new();
+        for px in frame.as_raw().chunks_exact(4) {
+            *histogram
+                .entry(pack_rgb(px[0], px[1], px[2]))
+                .or_insert(0) += 1;
+        }
+        let (palette, lut) = build_palette(&histogram);
         let mut work = vec![0.0f32; 64 * 16 * 3];
-        let indices = dither_frame(&frame, &mut work, &quantizer, &palette, 64, 16);
+        let indices = dither_frame(&frame, &mut work, &lut, &palette, 64, 16);
 
         let flat: std::collections::HashSet<u8> = indices[..32].iter().copied().collect();
         assert_eq!(flat.len(), 1, "flat region must map to exactly one palette entry");
@@ -253,12 +303,16 @@ mod tests {
             RgbaImage::from_pixel(8, 4, Rgba([20, 20, 20, 255])),
             RgbaImage::from_pixel(8, 4, Rgba([30, 30, 30, 255])),
         ];
-        let mut sampled = Vec::new();
+        let mut histogram = HashMap::new();
         for frame in &frames {
-            sampled.extend_from_slice(frame.as_raw());
+            for px in frame.as_raw().chunks_exact(4) {
+                *histogram
+                    .entry(pack_rgb(px[0], px[1], px[2]))
+                    .or_insert(0) += 1;
+            }
         }
-        let (quantizer, palette) = build_palette(&sampled);
-        let bytes = write_gif_frames(&quantizer, &palette, 8, 4, 180, frames.into_iter().map(Ok))
+        let (palette, lut) = build_palette(&histogram);
+        let bytes = write_gif_frames(&palette, &lut, 8, 4, 180, frames.into_iter().map(Ok))
             .expect("encode");
         assert_eq!(&bytes[0..6], b"GIF89a");
 

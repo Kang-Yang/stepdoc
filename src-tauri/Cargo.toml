@@ -28,10 +28,9 @@ serde_json = "1"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif"] }
-# Direct deps of the GIF exporter: gif is pinned to the same 0.13 image uses; color_quant powers
-# the shared NeuQuant global palette. Both are already in the lockfile via image.
+# Direct dep of the GIF exporter: gif is pinned to the same 0.13 image uses. Already in the
+# lockfile via image. 调色板已改为直方图高频色构建，不再依赖 color_quant/NeuQuant。
 gif = "0.13"
-color_quant = "1.1"
 rdev = "0.5"
 screenshots = "0.8"
 uuid = { version = "1", features = ["v4"] }

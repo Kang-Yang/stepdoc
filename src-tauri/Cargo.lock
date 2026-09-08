@@ -4912,7 +4912,6 @@ version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
- "color_quant",
  "docx-rs",
  "gif 0.13.3",
  "image 0.24.9",
