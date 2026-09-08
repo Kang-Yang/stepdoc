@@ -2,11 +2,11 @@
 
 操作步骤图文教程录制工具 —— 轻量级 Tauri 桌面应用，自动记录屏幕点击并生成带截图、带文字标注的分步教程文档。
 
-## 界面预览
+## 🖼️ 界面预览
 
 ![StepDoc 主界面](docs/stepdoc-main.png)
 
-## 功能特性
+## ✨ 功能特性
 
 - **点击自动录制**：监听全局鼠标点击（左键 / 右键），每次点击自动截取所在显示器的全屏，并在截图上用品牌青色圆环标注点击位置
 - **OCR 自动命名**：每次点击后自动识别光标附近的界面文字，把步骤描述从「点击此处」自动更新为「点击「文件」」这类可读文案。优先使用 RapidOCR，在 Windows 上回退到系统自带 OCR
@@ -15,7 +15,7 @@
 - **全局快捷键**：默认 `Ctrl + Alt + R` 随时开始 / 结束录制，可在设置中自定义或清除
 - **分享教程**：支持导出为 GIF 动图（适合微信 / 钉钉发送）或 Word（`.docx`）图文步骤
 
-## 环境要求
+## 🔧 环境要求
 
 | 依赖 | 说明 |
 |------|------|
@@ -27,7 +27,7 @@
 >
 > 首次运行 `npm run tauri dev` 时，Rust 会下载并编译依赖，耗时较长属正常现象。
 
-## 快速开始
+## 🚀 快速开始
 
 ```bash
 # 安装前端依赖
@@ -37,7 +37,7 @@ npm install
 npm run tauri dev
 ```
 
-## 构建发布
+## 📦 构建发布
 
 ```bash
 # 构建前端并打包桌面应用
@@ -46,7 +46,7 @@ npm run tauri build
 
 构建产物位于 `src-tauri/target/release/`，安装包（NSIS）位于 `src-tauri/target/release/bundle/nsis/`。
 
-## 使用说明
+## 📝 使用说明
 
 1. 点击 **开始录制**（或直接按全局快捷键 `Ctrl + Alt + R`，无需切回本应用），应用开始监听桌面鼠标操作并弹出悬浮录制栏
 2. 在目标软件中正常操作 —— 每次点击自动生成一步，截图上以青色圆环标注点击位置
@@ -58,7 +58,7 @@ npm run tauri build
 8. 在 **设置 → 快捷键** 中可以修改或清除全局快捷键（支持 `Ctrl / Alt / Shift / Win` 组合键与 F1~F12 功能键）
 9. 在 **设置 → OCR 调试** 中可开启「保存 OCR 调试明细」并打开调试目录
 
-## 项目结构
+## 🗂 项目结构
 
 ```
 stepdoc/
@@ -102,7 +102,7 @@ stepdoc/
 └── package.json
 ```
 
-## 技术栈
+## 🧩 技术栈
 
 - **前端**：React 19、TypeScript、Vite 7、`@tauri-apps/api`（dialog / opener 插件）
 - **桌面框架**：[Tauri 2](https://v2.tauri.app/)
@@ -116,7 +116,7 @@ stepdoc/
   - `tauri-plugin-global-shortcut` — 全局快捷键
   - `uuid`、`chrono`、`base64`、`serde` — 基础能力
 
-## 开发命令
+## 💻 开发命令
 
 | 命令 | 说明 |
 |------|------|
@@ -126,7 +126,7 @@ stepdoc/
 | `npm run tauri build` | 构建并打包桌面应用 |
 | `npm run icon` | 从 `app-icon.png` 生成应用图标 |
 
-## 已知限制
+## ⚠️ 已知限制
 
 - 录制期间监听的是**全局**输入事件，在其他窗口的点击同样会被记录
 - 当前版本采集的是**鼠标点击**（左键 / 右键），键盘输入暂不单独生成步骤
@@ -137,6 +137,23 @@ stepdoc/
 - 全局快捷键若与其他软件冲突会注册失败：启动时主界面顶部会显示提示横幅，设置面板中的快捷键会标记为「未生效」并展示失败原因，可在设置中换一个组合键
 - 全局输入监听可能被部分安全软件拦截
 
-## License
+## 🤝 共建者
+
+<p align="center">
+  <a href="https://github.com/Kang-Yang/stepdoc/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=Kang-Yang/stepdoc" alt="StepDoc 共建者" />
+  </a>
+</p>
+
+## ⭐ Star History
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Kang-Yang/stepdoc&type=Date&theme=dark" />
+    <img alt="StepDoc Star History" src="https://api.star-history.com/svg?repos=Kang-Yang/stepdoc&type=Date" />
+  </picture>
+</p>
+
+## 📄 License
 
 本项目采用 [MIT License](LICENSE) 开源。
